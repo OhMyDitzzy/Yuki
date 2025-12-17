@@ -110,7 +110,7 @@ export interface PluginHandler {
 }
 ```
 
-If you have questions or encounter problems or bugs, please visit the [issue](issues) page.
+If you have questions or encounter problems or bugs, please visit the [issue](https://github.com/OhMyDitzzy/Yuki/issues) page.
 
 ## License & Contributing
 This script is distributed under the [MIT license.](LICENSE) Feel free to use, modify, or redistribute it. I would be greatly appreciated if you could help me!
