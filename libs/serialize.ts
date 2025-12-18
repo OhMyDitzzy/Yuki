@@ -1661,8 +1661,8 @@ export function serialize() {
             sender: {
               get() {
                 const raw = (
-                  contextInfo.participantAlt ||
-                  contextInfo.remoteJidAlt ||
+                  self.key.participantAlt ||
+                  self.key.remoteJidAlt ||
                   contextInfo.participant ||
                   this.chat ||
                   ""
