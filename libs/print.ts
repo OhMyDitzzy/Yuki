@@ -120,7 +120,12 @@ export default async function print(m: ExtendedWAMessage, conn: any, _user?: any
   console.log();
 }
 
-watchFile(__filename, () => {
-  unwatchFile(__filename);
-  console.log(chalk.redBright("Update 'lib/print.ts'"));
-});
+if (!global.__print_watched) {
+  global.__print_watched = true;
+  
+  watchFile(__filename, () => {
+    unwatchFile(__filename);
+    delete global.__print_watched;
+    console.log(chalk.redBright("Update 'lib/print.ts'"));
+  });
+}
