@@ -39,14 +39,8 @@ export function makeWASocket(
     },
     decodeJid: {
       value(jid: any) {
-        if (!jid || typeof jid !== "string") {
-          return (!nullish(jid) && jid) || null;
-        }
-
-        const decoded = jidDecode(jid);
-        return decoded?.user && decoded?.server
-          ? `${decoded.user}@${decoded.server}`
-          : jid;
+        if (!jid || typeof jid !== 'string') return (!nullish(jid) && jid) || null
+        return jid.decodeJid()
       },
     },
     getJid: {
@@ -1522,7 +1516,7 @@ export function serialize() {
       get() {
         if (this.key?.fromMe) return (this.conn?.user?.jid || "").decodeJid();
         const raw =
-          this.key?.participantAlt || this.key?.participant || this.chat;
+          this.key?.participantAlt || this.key?.remoteJidAlt || this.key?.participant || this.chat;
         return this.conn.getJid((String(raw) as any).decodeJid());
       },
       enumerable: true,
@@ -1667,6 +1661,8 @@ export function serialize() {
             sender: {
               get() {
                 const raw = (
+                  contextInfo.participantAlt ||
+                  contextInfo.remoteJidAlt ||
                   contextInfo.participant ||
                   this.chat ||
                   ""

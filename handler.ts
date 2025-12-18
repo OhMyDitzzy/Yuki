@@ -173,10 +173,10 @@ export async function handler(chatUpdate: BaileysEventMap["messages.upsert"]) {
     const isBans = global.db.data.users[m.sender].banned;
 
     if (isROwner) {
-      db.data.users[m.sender].premium = true;
-      db.data.users[m.sender].premiumDate = "infinity";
-      db.data.users[m.sender].limit = "infinity";
-      db.data.users[m.sender].moderator = true;
+      global.db.data.users[m.sender].premium = true;
+      global.db.data.users[m.sender].premiumDate = "infinity";
+      global.db.data.users[m.sender].limit = "infinity";
+      global.db.data.users[m.sender].moderator = true;
     }
 
     if (opts['queque'] && m.text && !(isMods || isPrems)) {
@@ -539,16 +539,16 @@ global.dfail = (type: any, m: any, conn: any) => {
   // let userss = global.db.data.users[m.sender]
   let imgr = 'https://files.catbox.moe/0604mz.jpeg'
   let msg = {
-    rowner: '```Maaf, Fitur Ini Hanya Untuk Creator```',
-    owner: '```Maaf, Fitur ini khusus hanya untuk Owner```',
-    mods: '```Maaf, Fitur Ini hanya untuk Moderator```',
-    group: '```Maaf, Fitur ini hanya dapat di gunakan dalam grup```',
-    private: '```Fitur ini hanya bisa di gunakan di dalam Private Chat!```',
+    rowner: '```Sorry, This Feature Is For Creators Only```',
+    owner: '```Sorry, this feature is only for Owners```',
+    mods: '```Sorry, This Feature is for Moderators only```',
+    group: '```Sorry, this feature can only be used in groups```',
+    private: '```This feature can only be used in Private Chat!```',
     admin: null,
     botAdmin: '```Yuki Blom Jadi Admin, Gabisa pake Fitur itu🥲```',
-    restrict: '```Restrict Dinyalakan pada Chat ini, Harap matikan restrict```',
-    unreg: '```Kamu belum terdaftar, Silahkan daftar terlebih dahulu dengan mengetik:\n.daftar```',
-    premium: '```Fitur Ini hanya bisa di Akses Oleh member premium!```',
+    restrict: '```Restrict is turned on in this Chat, Please turn off restrict```',
+    unreg: '```You are not registered yet, please register first by typing:\n.register```',
+    premium: '```This feature can only be accessed by premium members!```',
   }[type];
   if (type === 'admin') {
     let stickerBuffer = fs.readFileSync('./media/admin.webp');
@@ -567,7 +567,7 @@ global.dfail = (type: any, m: any, conn: any) => {
           },
           forwardingScore: 256,
           externalAdReply: {
-            title: "[ AKSES DI TOLAK ]",
+            title: "Yuki Botz by DitzDev",
             body: 'ACCESS_DANIED',
             thumbnailUrl: imgr,
             sourceUrl: null,
@@ -580,7 +580,7 @@ global.dfail = (type: any, m: any, conn: any) => {
     );
   }
   let msg3 = {
-    zevent: `Perintah ini hanya dapat digunakan saat event*!`
+    zevent: `This command can only be used during event*!`
   }[type]
   if (msg3) return m.reply(msg3)
 }

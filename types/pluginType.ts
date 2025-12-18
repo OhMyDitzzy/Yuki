@@ -14,8 +14,12 @@ interface HandlerContext {
   isAdmin?: boolean;
   isBotAdmin?: boolean;
   isPrems?: boolean;
+  command?: string;
   isBans?: boolean;
+  groupMetadata?: any;
   delay?(angka: number): Promise<void>;
+  noPrefix?: string;
+  usedPrefix?: string;
   chatUpdate?: BaileysEventMap["messages.upsert"];
 }
 

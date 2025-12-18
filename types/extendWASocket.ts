@@ -14,6 +14,10 @@ export interface Logger extends ILogger {
   debug(...args: any[]): void;
 }
 
+type ExtendedWAUser = WASocket["user"] & {
+  jid?: string;
+}
+
 export interface FileResult {
   res?: any;
   filename?: string;
@@ -24,6 +28,7 @@ export interface FileResult {
 }
 
 export interface ExtendedWASocket extends WASocket {
+  user: ExtendedWAUser;
   chats: Record<string, any>;
   isLid?: Record<string, string>;
 
