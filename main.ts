@@ -89,7 +89,7 @@ if (!opts["test"]) {
   }, 2000)
 }
 
-if (!opts["test"] && opts["autocleartmp"]) {
+if (!opts["test"]) {
   setInterval(async () => {
     try {
       const tmpPath = path.join(process.cwd(), "tmp")
