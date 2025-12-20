@@ -53,22 +53,12 @@ function extractCommands(cmd: any): string[] {
   }
   if (cmd instanceof RegExp) {
     const pattern = cmd.source;
-
     const orMatch = pattern.match(/^\^?\(([^)]+)\)\$?/);
     if (orMatch) {
-      const commands = orMatch[1]!!.split('|').map(c => c.trim());
-      return commands;
+      return orMatch[1]!!.split('|').map(c => c.trim());
     }
-
-    const simpleMatch = pattern.match(/^\^?([a-z0-9_-]+)\$?/i);
-    if (simpleMatch) {
-      return [simpleMatch[1]!!];
-    }
-
-    const prefixMatch = pattern.match(/^\^?([a-z0-9_-]+)/i);
-    if (prefixMatch) {
-      return [prefixMatch[1]!!];
-    }
+    const match = pattern.match(/^\^?([a-z0-9_-]+)/i);
+    if (match) return [match[1]!!];
   }
   return [];
 }
@@ -95,21 +85,24 @@ let handler: PluginHandler = {
         : conn?.getName(m.sender) || "User";
 
       let payment = { "key": { "remoteJid": "0@s.whatsapp.net", "fromMe": false }, "message": { "requestPaymentMessage": { "currencyCodeIso4217": "USD", "amount1000": "99999999999", "requestFrom": "0@s.whatsapp.net", "noteMessage": { "extendedTextMessage": { "text": `${name}-san 🐼`, "contextInfo": { "mentionedJid": [`${m.sender}`] } } }, "expiryTimestamp": "0", "amount": { "value": "99999999999", "offset": 1000, "currencyCode": "USD" } } } }
-      const allPlugins: PluginInfo[] = Object.values(global.plugins || {})
-        .filter((plug: any) => {
-          return plug?.name && plug?.description && plug?.tags;
-        })
-        .map((plug: any) => ({
-          name: plug.name,
-          description: plug.description,
-          tags: Array.isArray(plug.tags)
-            ? plug.tags
-            : [plug.tags],
-          enabled: !plug.disabled,
-          usage: Array.isArray(plug.usage) ? plug.usage.join(", ") : (plug.usage || ""),
-          cmd: extractCommands(plug.cmd)
-        }))
-        .filter(item => item.enabled && item.cmd.length > 0);
+      const metadataMap = global.commandCache.getMetadata();
+
+      const allPlugins: PluginInfo[] = [];
+      for (const [pluginName, metadata] of metadataMap.entries()) {
+        const plugin = global.plugins[pluginName];
+        if (!plugin || plugin.disabled) continue;
+
+        const commands = extractCommands(plugin.cmd);
+        if (commands.length > 0) {
+          allPlugins.push({
+            name: metadata.name,
+            description: metadata.description,
+            tags: metadata.tags,
+            usage: metadata.usage,
+            cmd: commands
+          } as any);
+        }
+      }
 
       const groupedByTag: Record<string, PluginInfo[]> = {};
       allPlugins.forEach(plugin => {
@@ -122,6 +115,7 @@ let handler: PluginHandler = {
         });
       });
 
+      m.react("⏳")
       const sections: ListV2["sections"] = [];
 
       if (!text) {
@@ -131,6 +125,8 @@ let handler: PluginHandler = {
         headerText += `│ • System: baileys (md)\n`;
         headerText += `│ • Total Features: ${allPlugins.length}\n`;
         headerText += `│ • Version: ${packageInfo.version || "1.0.0"}\n`;
+        const cacheStats = global.commandCache.getStats();
+        headerText += `│ • Cached Commands: ${cacheStats.total}\n`;
         headerText += `╰───────────────────\n\n`;
         headerText += `💡 *Select a category below to see features!*`;
 
@@ -165,7 +161,7 @@ let handler: PluginHandler = {
                 title: "Yuki Botz",
                 body: packageInfo.version,
                 thumbnailUrl: global.thumb,
-                sourceUrl: "https://github.com/OhMyDitzzy/Yuki",
+                sourceUrl: global.sourceUrl,
                 mediaType: 1,
                 renderLargerThumbnail: true
               }
@@ -185,6 +181,8 @@ let handler: PluginHandler = {
           list,
           { userJid: conn.user.id, quoted: payment as any }
         );
+
+        m.react("✅");
         return;
       }
 
@@ -244,6 +242,7 @@ let handler: PluginHandler = {
       headerText += `╰───────────────────\n\n`;
       headerText += `💡 *Select a feature below!*`;
 
+      m.react("⏳")
       const list: ListV2 = {
         title: "🎯 Select Feature",
         sections
@@ -267,7 +266,7 @@ let handler: PluginHandler = {
         list,
         { userJid: conn.user.id, quoted: m }
       );
-
+      m.react("✅")
     } catch (e) {
       console.error("Error in menu plugin:", e);
       await conn?.reply(m.chat, "❌ Sorry, an error occurred while executing the menu command.", m);
