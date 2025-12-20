@@ -3,6 +3,7 @@ import { prepareWAMessageMedia } from "baileys";
 import moment from "moment-timezone";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import canvafy from "canvafy";
 import type { ListV2 } from "types/buttons/interactive_message_button";
 
 function greetings(): string {
@@ -85,7 +86,18 @@ let handler: PluginHandler = {
         : conn?.getName(m.sender) || "User";
 
       let payment = { "key": { "remoteJid": "0@s.whatsapp.net", "fromMe": false }, "message": { "requestPaymentMessage": { "currencyCodeIso4217": "USD", "amount1000": "99999999999", "requestFrom": "0@s.whatsapp.net", "noteMessage": { "extendedTextMessage": { "text": `${name}-san 🐼`, "contextInfo": { "mentionedJid": [`${m.sender}`] } } }, "expiryTimestamp": "0", "amount": { "value": "99999999999", "offset": 1000, "currencyCode": "USD" } } } }
+
       const metadataMap = global.commandCache.getMetadata();
+      let ppUrl: any = await conn!!.profilePictureUrl(m.sender, 'image').catch(() => "https://telegra.ph/file/1dff1788814dd281170f8.jpg");
+      // TODO: Add an actual rank, get that things form globa.db
+      const rankBuffer = await new canvafy.Rank()
+            .setAvatar(ppUrl)
+            .setBackground("image", "https://telegra.ph/file/98225485a33fc4a5b47b2.jpg")
+            .setRank(80, "LEVEL")
+            .setBorder("#fff")
+            .setUsername(`${name}`)
+            .setRankColor({ text: "#fff", number: "#fff" } as any)
+            .build();
 
       const allPlugins: PluginInfo[] = [];
       for (const [pluginName, metadata] of metadataMap.entries()) {
@@ -172,7 +184,7 @@ let handler: PluginHandler = {
             header: {
               title: `Hi @${m.sender.replace(/@.+/g, '')}! ${greetings()}`,
               subtitle: `Version ${packageInfo.version || "1.0.0"}`,
-              hasMediaAttachment: true, ...(await prepareWAMessageMedia({ document: { url: "https://wa.me/" }, mimetype: global.doc, fileName: "Yuki_Botz", jpegThumbnail: await conn!.resize(global.docthumb, 300, 100), fileLength: 100000000000 } as any, { upload: conn.waUploadToServer }))
+              hasMediaAttachment: true, ...(await prepareWAMessageMedia({ document: { url: "https://wa.me/" }, mimetype: global.doc, fileName: "Yuki_Botz", jpegThumbnail: await conn!.resize(rankBuffer as any, 300, 100), fileLength: 100000000000 } as any, { upload: conn.waUploadToServer }))
             },
             footer: {
               text: `Type ${usedPrefix}menu <tag> to see features in a category`
