@@ -23,3 +23,4 @@ global.thumb = "https://files.catbox.moe/7n4axc.png"
 global.sourceUrl = "https://github.com/OhMyDitzzy/Yuki"
 /// Change you own document thumb
 global.docthumb = "https://files.catbox.moe/gfwn8c.png"
+global.multiplier = 100000

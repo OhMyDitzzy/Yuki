@@ -2,8 +2,10 @@ import type { BaileysEventMap } from "baileys"
 import { smsg } from "./libs/serialize";
 import type { ExtendedWAMessage } from "./types/extendWAMessage";
 import util from "node:util";
-import fs, { truncateSync } from "node:fs";
+import fs from "node:fs";
 import { uploader } from "./libs/uploadImage";
+import { initializeDatabase } from "./libs/database-initializer";
+import { assignStaffRole, StaffRole, updateUserRole } from "libs/role-system.ts";
 
 const isNumber = (x: number) => typeof x === 'number' && !isNaN(x)
 const delay = (ms: number) => isNumber(ms) && new Promise(resolve => setTimeout(resolve, ms))
@@ -22,140 +24,7 @@ export async function handler(chatUpdate: BaileysEventMap["messages.upsert"]) {
     m.exp = 0;
     m.limit = false;
     try {
-      /**
-       * Inside this trycatch is the implementation for databases 
-       *  You can delete or add your data in databases here.
-       *   But be careful because it will have an impact on 
-       *   e.g: global.db.data.some_data
-       */
-      let user = global.db.data.users[m.sender];
-      if (typeof user !== 'object') global.db.data.users[m.sender] = {};
-      if (user) {
-        if (!isNumber(user.exp)) user.exp = 0;
-        if (!isNumber(user.limit)) user.limit = 100;
-        if (!isNumber(user.level)) user.level = 0;
-        if (!('registered' in user)) user.registered = false;
-        if (!user.registered) {
-          if (!("name" in user)) user.name = m.name;
-          if (!isNumber(user.age)) user.age = -1;
-          if (!isNumber(user.regTime)) user.regTime = -1;
-          if (!isNumber(user.limit)) user.limit = 50;
-        }
-        if (!isNumber(user.afk)) user.afk = -1;
-        if (!('afkReason' in user)) user.afkReason = '';
-        if (!('banned' in user)) user.banned = false;
-        if (!('bannedReason' in user)) user.bannedReason = '';
-        if (!('premium' in user)) user.premium = false;
-        if (!isNumber(user.premiumDate)) user.premiumDate = 0;
-      } else global.db.data.users[m.sender] = {
-        name: m.name,
-        level: 0,
-        age: -1,
-        regTime: -1,
-        exp: 0,
-        limit: 100,
-        registered: false,
-        afk: -1,
-        afkReason: '',
-        banned: false,
-        bannedReason: '',
-        premium: false,
-      }
-
-      let chat = global.db.data.chats[m.chat]
-      if (typeof chat !== 'object') global.db.data.chats[m.chat] = {}
-      if (chat) {
-        if (!('isBanned' in chat)) chat.isBanned = false
-        if (!('welcome' in chat)) chat.welcome = true
-        if (!('autoread' in chat)) chat.autoread = false
-        if (!('detect' in chat)) chat.detect = false
-        if (!('sWelcome' in chat)) chat.sWelcome = `Selamat Datang @user`
-        if (!('sBye' in chat)) chat.sBye = `Selamat Tinggal @user`
-        if (!('sPromote' in chat)) chat.sPromote = '@user telah di promote'
-        if (!('sDemote' in chat)) chat.sDemote = '@user telah di demote'
-        if (!('delete' in chat)) chat.delete = true
-        if (!('antiVirtex' in chat)) chat.antiVirtex = false
-        if (!('antiLink' in chat)) chat.antiLink = false
-        if (!('tikauto' in chat)) chat.tikauto = false
-        if (!('captcha' in chat)) chat.captcha = false
-        if (!('antifoto' in chat)) chat.antiFoto = false
-        if (!('antividio' in chat)) chat.antiVideo = false
-        if (!('autoJpm' in chat)) chat.autoJpm = false
-        if (!('antiPorn' in chat)) chat.antiPorn = false
-        if (!('antiBot' in chat)) chat.antiBot = true
-        if (!('antiSpam' in chat)) chat.antiSpam = false
-        if (!('freply' in chat)) chat.freply = false
-        if (!('simi' in chat)) chat.simi = false
-        if (!('ai' in chat)) chat.ai = false
-        if (!('ngetik' in chat)) chat.ngetik = true
-        if (!('autoVn' in chat)) chat.autoVn = false
-        if (!('antiSticker' in chat)) chat.antiSticker = false
-        if (!('stiker' in chat)) chat.stiker = false
-        if (!('antiBadword' in chat)) chat.antiBadword = false
-        if (!('antiToxic' in chat)) chat.antiToxic = false
-        if (!('viewonce' in chat)) chat.viewonce = false
-        if (!('useDocument' in chat)) chat.useDocument = false
-        if (!('antiToxic' in chat)) chat.antiToxic = false
-        if (!isNumber(chat.expired)) chat.expired = 0
-      } else global.db.data.chats[m.chat] = {
-        isBanned: false,
-        welcome: true,
-        autoread: false,
-        simi: false,
-        ai: false,
-        ngetik: true,
-        autoVn: false,
-        stiker: false,
-        antiSticker: false,
-        antiBadword: false,
-        antiToxic: false,
-        antiSpam: false,
-        antiBot: true,
-        detect: false,
-        autoJpm: false,
-        sWelcome: '',
-        sBye: '',
-        sPromote: '@user telah di promote!',
-        sDemote: '@user telah di demote',
-        delete: true,
-        antiLink: false,
-        tikauto: false,
-        captcha: false,
-        antifoto: false,
-        antividio: false,
-        antiPorn: false
-      }
-      let settings = global.db.data.settings[this.user.jid]
-      if (typeof settings !== 'object') global.db.data.settings[this.user.jid] = {}
-      if (settings) {
-        if (!('self' in settings)) settings.self = false
-        if (!('autoread' in settings)) settings.autoread = false
-        if (!('composing' in settings)) settings.composing = true
-        if (!('restrict' in settings)) settings.restrict = true
-        if (!('autorestart' in settings)) settings.autorestart = true
-        if (!('gconly' in settings)) settings.gconly = true
-        if (!('restartDB' in settings)) settings.restartDB = 0
-        if (!isNumber(settings.status)) settings.status = 0
-        if (!('anticall' in settings)) settings.anticall = true
-        if (!('clear' in settings)) settings.clear = true
-        if (!isNumber(settings.clearTime)) settings.clearTime = 0
-        if (!('freply' in settings)) settings.freply = true
-        if (!('akinator' in settings)) settings.akinator = {}
-      } else global.db.data.settings[this.user.jid] = {
-        self: false,
-        autoread: false,
-        restrict: true,
-        autorestart: true,
-        composing: true,
-        restartDB: 0,
-        gconly: true,
-        status: 0,
-        anticall: true,
-        clear: true,
-        clearTime: 0,
-        freply: true,
-        akinator: {}
-      }
+      initializeDatabase(m, this.user.jid);
     } catch (e) {
       console.error(e)
     }
@@ -170,7 +39,7 @@ export async function handler(chatUpdate: BaileysEventMap["messages.upsert"]) {
     const body = typeof m.text == 'string' ? m.text : false;
     const isROwner = [conn.decodeJid(this.user.id), ...global.owner.map(([number, _]) => number)].map(v => v.replace(/[^0-9]/g, '') + '@s.whatsapp.net').includes(m.sender);
     const isOwner = isROwner || m.fromMe;
-    const isMods = isOwner || global.mods.map(v => v.replace(/[^0-9]/g, '') + '@s.whatsapp.net').includes(m.sender);
+    const isMods = isOwner || global.mods.map((v: any) => v.replace(/[^0-9]/g, '') + '@s.whatsapp.net').includes(m.sender);
     const isPrems = isROwner || global.db.data.users[m.sender].premiumTime > 0;
     const isBans = global.db.data.users[m.sender].banned;
 
@@ -178,8 +47,12 @@ export async function handler(chatUpdate: BaileysEventMap["messages.upsert"]) {
       global.db.data.users[m.sender].premium = true;
       global.db.data.users[m.sender].premiumDate = "infinity";
       global.db.data.users[m.sender].limit = "infinity";
-      global.db.data.users[m.sender].moderator = true;
+      assignStaffRole(global.db.data.users[m.sender], StaffRole.OWNER)
+    } else {
+      assignStaffRole(global.db.data.users[m.sender], StaffRole.MODERATOR);
     }
+
+    updateUserRole(global.db.data.users[m.sender], global.db.data.users[m.sender].level)
 
     if (opts['queque'] && m.text && !(isMods || isPrems)) {
       let queque = this.msgqueque, time = 1000 * 5
@@ -197,8 +70,8 @@ export async function handler(chatUpdate: BaileysEventMap["messages.upsert"]) {
     let _user = global.db.data && global.db.data.users && global.db.data.users[m.sender]
     const groupMetadata = (m.isGroup ? (conn.chats[m.chat] || {}).metadata : {}) || {}
     const participants = (m.isGroup ? groupMetadata.participants : []) || []
-    const user = (m.isGroup ? participants.find(u => conn.decodeJid(u.id) === m.sender) : {}) || {}
-    const bot = (m.isGroup ? participants.find(u => conn.decodeJid(u.id) == this.user.jid) : {}) || {};
+    const user = (m.isGroup ? participants.find((u: any) => conn.decodeJid(u.id) === m.sender) : {}) || {}
+    const bot = (m.isGroup ? participants.find((u: any) => conn.decodeJid(u.id) == this.user.jid) : {}) || {};
     const isRAdmin = user && user.admin == 'superadmin' || false
     // is the user admin?
     const isAdmin = isRAdmin || user && user.admin == 'admin' || false
@@ -349,8 +222,10 @@ export async function handler(chatUpdate: BaileysEventMap["messages.upsert"]) {
       m.isCommand = true
       // This is xp user, Where only run command 
       //  user gets 17 exp
-      let xp = 'exp' in plugin ? parseInt(plugin.exp) : 17 // XP Earning per command
-      m.exp += xp;
+      const { calculateDynamicXP } = await import('./libs/xp-system.ts');
+      const baseXP = 'exp' in plugin ? parseInt(plugin.exp) : 50;
+      const currentLevel = global.db.data.users[m.sender]?.level;
+      m.exp = calculateDynamicXP(baseXP, currentLevel);
       if (!isPrems && plugin.limit && global.db.data.users[m.sender].limit < plugin.limit * 1) {
         this.reply(m.chat, "Your bot usage limit has expired and will be reset at 00.00 WIB (Indonesian Time)\nTo get more limit upgrade to premium send *.premium*", m);
       }
@@ -419,14 +294,14 @@ export async function handler(chatUpdate: BaileysEventMap["messages.upsert"]) {
       if (quequeIndex !== -1) this.msgqueque.splice(quequeIndex, 1)
     }
 
-    let user, stats = global.db.data.stats
+    let user: any, stats = global.db.data.stats
     if (m) {
       if (m.sender && (user = global.db.data.users[m.sender])) {
         user.exp += m.exp
         user.limit -= m.limit * 1
       }
 
-      let stat
+      let stat: any
       if (m.plugin) {
         let now = + new Date
         if (m.plugin in stats) {

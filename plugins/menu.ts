@@ -5,6 +5,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import canvafy from "canvafy";
 import type { ListV2 } from "types/buttons/interactive_message_button";
+import leveling from "libs/levelling";
 
 function greetings(): string {
   const time = parseInt(moment.tz("Asia/Jakarta").format("HH"));
@@ -89,15 +90,24 @@ let handler: PluginHandler = {
 
       const metadataMap = global.commandCache.getMetadata();
       let ppUrl: any = await conn!!.profilePictureUrl(m.sender, 'image').catch(() => "https://telegra.ph/file/1dff1788814dd281170f8.jpg");
-      // TODO: Add an actual rank, get that things form globa.db
+      let user = global.db.data.users[m.sender];
+ 
+      let { min, max } = leveling.xpRange(user.level, global.multiplier);
+      let currentXp = user.exp - min;
+      let requiredXp = max - min;
+      
+      if (currentXp < 0) currentXp = 0;
+      
       const rankBuffer = await new canvafy.Rank()
-            .setAvatar(ppUrl)
-            .setBackground("image", "https://telegra.ph/file/98225485a33fc4a5b47b2.jpg")
-            .setRank(80, "LEVEL")
-            .setBorder("#fff")
-            .setUsername(`${name}`)
-            .setRankColor({ text: "#fff", number: "#fff" } as any)
-            .build();
+        .setAvatar(ppUrl)
+        .setBackground("image", "https://telegra.ph/file/98225485a33fc4a5b47b2.jpg")
+        .setRank(user.level, "LEVEL")
+        .setBorder("#fff")
+        .setUsername(`${name}`)
+        .setCurrentXp(currentXp, "#000")
+        .setRequiredXp(requiredXp, "#000") 
+        .setRankColor({ text: "#fff", number: "#fff" } as any)
+        .build();
 
       const allPlugins: PluginInfo[] = [];
       for (const [pluginName, metadata] of metadataMap.entries()) {
