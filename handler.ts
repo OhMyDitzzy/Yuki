@@ -29,8 +29,8 @@ export async function handler(chatUpdate: BaileysEventMap["messages.upsert"]) {
       console.error(e)
     }
     if (opts["self"]) {
-        m.exp = 0;
-        m.limit = false;
+      m.exp = 0;
+      m.limit = false;
     }
     if (opts["nyimak"]) return;
     if (opts["self"] && !m.fromMe && !global.db.data.users[m.sender].moderator) return
@@ -234,7 +234,7 @@ export async function handler(chatUpdate: BaileysEventMap["messages.upsert"]) {
       } else {
         m.exp = 0;
       }
-      
+
       if (!isPrems && plugin.limit && global.db.data.users[m.sender].limit < plugin.limit * 1) {
         this.reply(m.chat, "Your bot usage limit has expired and will be reset at 00.00 WIB (Indonesian Time)\nTo get more limit upgrade to premium send *.premium*", m);
       }
@@ -307,8 +307,8 @@ export async function handler(chatUpdate: BaileysEventMap["messages.upsert"]) {
     if (m) {
       if (m.sender && (user = global.db.data.users[m.sender])) {
         if (!opts["self"]) {
-            user.exp += m.exp
-            user.limit -= m.limit * 1
+          user.exp += m.exp
+          user.limit -= m.limit * 1
         }
       }
 
@@ -350,6 +350,7 @@ export async function handler(chatUpdate: BaileysEventMap["messages.upsert"]) {
   }
 }
 
+// I wonder why this is still a bug?
 export async function participantsUpdate({ id, participants, action }: BaileysEventMap["group-participants.update"], simulate: boolean = false) {
   if (opts["self"]) return;
   if (this.isInit && !simulate) return

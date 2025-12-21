@@ -75,6 +75,7 @@ export function initializeChat(chat: any, chatId: string): void {
     if (!('antividio' in chat)) chat.antiVideo = false
     if (!('autoJpm' in chat)) chat.autoJpm = false
     if (!('antiPorn' in chat)) chat.antiPorn = false
+    if (!('antiPorn' in chat)) chat.detect = false
     if (!('antiBot' in chat)) chat.antiBot = true
     if (!('antiSpam' in chat)) chat.antiSpam = false
     if (!('freply' in chat)) chat.freply = false
@@ -103,6 +104,7 @@ export function initializeChat(chat: any, chatId: string): void {
     antiBadword: false,
     antiToxic: false,
     antiSpam: false,
+    detect: false,
     antiBot: true,
     detect: false,
     autoJpm: false,

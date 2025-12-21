@@ -9,7 +9,7 @@ import yargs from "yargs";
 import { makeWASocket, serialize, protoType } from './libs/serialize';
 import chalk from "chalk";
 import ts from "typescript";
-import chokidar, { FSWatcher, type ChokidarOptions } from "chokidar";
+import chokidar, { FSWatcher } from "chokidar";
 import cp from "node:child_process";
 import crypto from 'node:crypto';
 import { commandCache } from "./libs/commandCache";
@@ -273,9 +273,9 @@ async function connectionUpdate(update: any) {
     if (lastDisconnect?.error) {
       const statusCode = lastDisconnect.error.output?.statusCode;
       const errorMessage = lastDisconnect.error.output?.payload?.message || lastDisconnect.error.message;
-      
+
       conn.logger.error(`Disconnect reason: ${errorMessage} (${statusCode})`);
-      
+
       if (statusCode === DisconnectReason.loggedOut) {
         conn.logger.error('Logged out permanently. Please do pairing code again.');
         await cleanupManager.cleanup();
@@ -290,7 +290,7 @@ async function connectionUpdate(update: any) {
           conn.logger.error('Failed to clear session:', e);
         }
       }
-      
+
       if (
         statusCode === DisconnectReason.connectionClosed ||
         statusCode === DisconnectReason.connectionLost ||
@@ -308,12 +308,12 @@ async function connectionUpdate(update: any) {
         }, 5000);
         return;
       }
- 
+
       if (statusCode === DisconnectReason.restartRequired) {
         conn.logger.warn('Restart required by WhatsApp...');
         await cleanupManager.cleanup();
       }
-  
+
       conn.logger.error(`Unknown disconnect reason: ${statusCode}`);
       setTimeout(async () => {
         try {
