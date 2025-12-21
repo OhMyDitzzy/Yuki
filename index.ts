@@ -64,7 +64,15 @@ function start(file: string) {
   if (!opts["test"]) {
     if (!rl.listenerCount("")) {
       rl.on('line', line => {
-        p.emit('message', line.trim());
+        const cmd = line.trim().toLowerCase();
+
+        if (cmd === 'memory' || cmd === 'mem' || cmd === 'stats') {
+          p.send('get_memory_stats');
+        } else if (cmd === "fc_gc" || cmd === "force_gc") {
+          p.send('force_garbage_collector')
+        } else {
+          p.emit('message', line.trim());
+        }
       });
     }
   }

@@ -14,6 +14,8 @@ import cp from "node:child_process";
 import crypto from 'node:crypto';
 import { commandCache } from "./libs/commandCache";
 import { yukiKeepMatcher, yukiKeepParser } from "libs/yukiKeepParser";
+import { CleanupManager } from "libs/cleanupManager";
+import { MemoryMonitor } from "libs/MemoryMonitor";
 
 function filename(metaUrl = import.meta.url) {
   return fileURLToPath(metaUrl)
@@ -58,6 +60,7 @@ global.loadDatabase = async function loadDatabase() {
 }
 loadDatabase()
 
+
 const { state, saveCreds } = await useMultiFileAuthState("Yuki");
 const connOptions: UserFacingSocketConfig = {
   logger: pino({ level: "fatal" }),
@@ -75,6 +78,30 @@ const connOptions: UserFacingSocketConfig = {
 global.conn = makeWASocket(connOptions);
 conn.isInit = false
 
+const cleanupManager = new CleanupManager();
+const memoryMonitor = new MemoryMonitor(conn.logger, cleanupManager, {
+  baselineDelayMs: 180000,
+  thresholds: {
+    heapAbsoluteMB: 800,
+    rssPercentOfSystemRAM: 0.6,
+
+  }
+});
+
+memoryMonitor.start(60000);
+
+memoryMonitor.updateThresholds({
+  heapAbsoluteMB: 1000
+});
+
+cleanupManager.addCleanupHandler(async () => {
+  if (global.db && global.db.data) {
+    conn.logger.info('Saving database before shutdown...');
+    await global.db.write().catch(console.error);
+  }
+});
+
+
 if (!conn.authState.creds.registered) {
   console.warn(chalk.yellow("Processing pairing code, wait a moment..."));
   setTimeout(async () => {
@@ -85,9 +112,11 @@ if (!conn.authState.creds.registered) {
 }
 
 if (!opts["test"]) {
-  if (global.db) setInterval(async () => {
+  const dbSaveInterval = setInterval(async () => {
     if (global.db.data) await global.db.write().catch(console.error);
-  }, 2000)
+  }, 2000);
+
+  cleanupManager.addInterval(dbSaveInterval);
 }
 
 if (!opts["test"]) {
@@ -189,6 +218,8 @@ if (!opts["test"]) {
       }
     });
 
+    cleanupManager.addWatcher(configWatcher);
+
     configWatcher.on('change', () => {
       yukiKeepParser.clearCache();
       startCleanup();
@@ -208,18 +239,8 @@ if (!opts["test"]) {
   }
 
   startCleanup();
-
-  process.on('exit', () => {
-    if (cleanupInterval) clearInterval(cleanupInterval);
-    if (configWatcher) configWatcher.close();
+  cleanupManager.addCleanupHandler(() => {
     cleanupMemory();
-  });
-
-  process.on('SIGINT', () => {
-    if (cleanupInterval) clearInterval(cleanupInterval);
-    if (configWatcher) configWatcher.close();
-    cleanupMemory();
-    process.exit(0);
   });
 }
 
@@ -247,7 +268,7 @@ async function connectionUpdate(update: any) {
   }
 
   if (connection == 'close') {
-    conn.logger.error('Connection lost & trying to reconnect...');
+    conn.logger.error('Connection lost...');
   }
 
   if (lastDisconnect && lastDisconnect.error && lastDisconnect.error.output && lastDisconnect.error.output.statusCode !== DisconnectReason.loggedOut) {
@@ -260,6 +281,14 @@ async function connectionUpdate(update: any) {
 }
 
 process.on("uncaughtException", console.error);
+process.on("message", (msg) => {
+  if (msg === "get_memory_stats") {
+    memoryMonitor.displayMemoryTable();
+  }
+  if (msg === "force_garbage_collector") {
+    memoryMonitor.forceGC();
+  }
+})
 
 let isInit = true
 let handler = await import('./handler')
@@ -492,6 +521,8 @@ const watcher = chokidar.watch(pluginFolder, {
   },
 });
 
+cleanupManager.addWatcher(watcher);
+
 watcher
   .on("change", global.reload)
   .on("add", global.reload)
@@ -539,3 +570,33 @@ async function _quickTest() {
 _quickTest()
   .then(() => conn.logger.info('Quick Test Done'))
   .catch(console.error)
+
+async function gracefulShutdown(signal: string) {
+  conn.logger.info(`\n${signal} received. Starting graceful shutdown...`);
+
+  try {
+    if (global.conn?.ws) {
+      conn.logger.info('Closing WhatsApp connection...');
+      global.conn.ws.close();
+    }
+
+    conn.logger.info('Running cleanup handlers...');
+    await cleanupManager.cleanup();
+
+    const stats = cleanupManager.getStats();
+    conn.logger.info(`Cleanup complete: ${JSON.stringify(stats)}`);
+    conn.logger.info(`Final memory: ${memoryMonitor.getStats()}`);
+
+    conn.logger.info('✅ Shutdown complete');
+    process.exit(0);
+  } catch (error) {
+    conn.logger.error(`Error during shutdown: ${error}`);
+    process.exit(1);
+  }
+}
+
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+process.on('exit', () => {
+  conn.logger.info('Process exiting...');
+});
