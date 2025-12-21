@@ -91,13 +91,14 @@ let handler: PluginHandler = {
       const metadataMap = global.commandCache.getMetadata();
       let ppUrl: any = await conn!!.profilePictureUrl(m.sender, 'image').catch(() => "https://telegra.ph/file/1dff1788814dd281170f8.jpg");
       let user = global.db.data.users[m.sender];
- 
+
       let { min, max } = leveling.xpRange(user.level, global.multiplier);
       let currentXp = user.exp - min;
       let requiredXp = max - min;
-      
+
       if (currentXp < 0) currentXp = 0;
-      
+      if (currentXp < 0) requiredXp = 0;
+
       const rankBuffer = await new canvafy.Rank()
         .setAvatar(ppUrl)
         .setBackground("image", "https://telegra.ph/file/98225485a33fc4a5b47b2.jpg")
@@ -105,7 +106,7 @@ let handler: PluginHandler = {
         .setBorder("#fff")
         .setUsername(`${name}`)
         .setCurrentXp(currentXp, "#000")
-        .setRequiredXp(requiredXp, "#000") 
+        .setRequiredXp(requiredXp, "#000")
         .setRankColor({ text: "#fff", number: "#fff" } as any)
         .build();
 
@@ -143,12 +144,19 @@ let handler: PluginHandler = {
       if (!text) {
         let headerText = `My name is *Yuki*! I am an automated system (WhatsApp Bot) that can help you do things, search for, and obtain data/information only through WhatsApp.\n\n`;
         headerText += `╭───────────────────\n`;
-        headerText += `│ 📊 *Bot Information*\n`;
+        headerText += `│ *Bot Information*\n`;
         headerText += `│ • System: baileys (md)\n`;
         headerText += `│ • Total Features: ${allPlugins.length}\n`;
         headerText += `│ • Version: ${packageInfo.version || "1.0.0"}\n`;
         const cacheStats = global.commandCache.getStats();
         headerText += `│ • Cached Commands: ${cacheStats.total}\n`;
+        headerText += `╰───────────────────\n\n`;
+        headerText += `╭───────────────────\n`;
+        headerText += `│ *User Information*\n`;
+        headerText += `│ • Role: ${user.role}\n`;
+        headerText += user.staffRole ? `│ • Staff Role: ${user.staffRole}\n` : '';
+        headerText += `│ • Level: ${user.level}\n`;
+        headerText += `│ • Limit: ${user.limit}\n`;
         headerText += `╰───────────────────\n\n`;
         headerText += `💡 *Select a category below to see features!*`;
 

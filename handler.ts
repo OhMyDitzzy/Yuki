@@ -215,13 +215,13 @@ export async function handler(chatUpdate: BaileysEventMap["messages.upsert"]) {
         fail('private', m, this)
         continue
       }
-      if (plugin.register == true && _user.registered == false) { // Butuh daftar?
+      if (plugin.register == true && _user.registered == false) { // Need to register?
         fail('unreg', m, this)
         continue
       }
       m.isCommand = true
       // This is xp user, Where only run command 
-      //  user gets 17 exp
+      // Users gain EXP based on their level.
       const { calculateDynamicXP } = await import('./libs/xp-system.ts');
       const baseXP = 'exp' in plugin ? parseInt(plugin.exp) : 50;
       const currentLevel = global.db.data.users[m.sender]?.level;

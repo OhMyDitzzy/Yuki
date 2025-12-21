@@ -62,7 +62,7 @@ export function getCompleteRole(user: any, level: number): string {
   const staffRole = user.staffRole ? getStaffRoleDisplay(user.staffRole) : null;
 
   if (staffRole) {
-    return `${staffRole}`;
+    return `${staffRole} | ${playerRole}`;
   }
 
   return playerRole;
