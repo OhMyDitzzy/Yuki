@@ -351,6 +351,7 @@ export async function handler(chatUpdate: BaileysEventMap["messages.upsert"]) {
 }
 
 export async function participantsUpdate({ id, participants, action }: BaileysEventMap["group-participants.update"], simulate: boolean = false) {
+  if (conn.isInit) return;
   if (opts["self"]) return;
   if (this.isInit && !simulate) return;
   if (global.db.data == null) await loadDatabase();
@@ -464,7 +465,8 @@ export async function participantsUpdate({ id, participants, action }: BaileysEv
 }
 
 export async function groupsUpdate(groupsUpdate: BaileysEventMap["groups.update"]) {
-  if (opts['self']) return
+  if (opts['self']) return;
+  if (conn.isInit) return;
   for (const groupUpdate of groupsUpdate) {
     const id = groupUpdate.id
     if (!id) continue
@@ -475,8 +477,8 @@ export async function groupsUpdate(groupsUpdate: BaileysEventMap["groups.update"
     if (groupUpdate.subject) text = (chats.sSubject || this.sSubject || conn.sSubject || '```Subject has been changed to```\n@subject').replace('@subject', groupUpdate.subject)
     if (groupUpdate.announce == true) text = (chats.sAnnounceOn || this.sAnnounceOn || conn.sAnnounceOn || '*Group has been closed!*')
     if (groupUpdate.announce == false) text = (chats.sAnnounceOff || this.sAnnounceOff || conn.sAnnounceOff || '*Group has been open!*')
-    if (groupUpdate.restrict == true) text = (chats.sRestrictOn || this.sRestrictOn || conn.sRestrictOn || '*Group has been all participants!*')
-    if (groupUpdate.restrict == false) text = (chats.sRestrictOff || this.sRestrictOff || conn.sRestrictOff || '*Group has been only admin!*')
+    if (groupUpdate.restrict == true) text = (chats.sRestrictOn || this.sRestrictOn || conn.sRestrictOn || '*The group has been set to: all participants can send messages.*')
+    if (groupUpdate.restrict == false) text = (chats.sRestrictOff || this.sRestrictOff || conn.sRestrictOff || '*Group has been changed to: Only admins can send messages.*')
     if (!text) continue
     this.reply(id, text.trim())
   }
