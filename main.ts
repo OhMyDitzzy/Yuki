@@ -76,7 +76,8 @@ const connOptions: UserFacingSocketConfig = {
 }
 
 global.conn = makeWASocket(connOptions);
-conn.isInit = false
+conn.isInit = false;
+conn.isShuttingDown = false;
 
 const cleanupManager = new CleanupManager();
 const memoryMonitor = new MemoryMonitor(conn.logger, cleanupManager, {
@@ -268,6 +269,11 @@ async function connectionUpdate(update: any) {
   }
 
   if (connection == 'close') {
+    if (conn.isShuttingDown) {
+      conn.logger.info('Connection closed gracefully');
+      return;
+    }
+  
     conn.logger.error('Connection lost...');
 
     if (lastDisconnect?.error) {
@@ -331,16 +337,6 @@ async function connectionUpdate(update: any) {
   }
 }
 
-process.on("uncaughtException", console.error);
-process.on("message", (msg) => {
-  if (msg === "get_memory_stats") {
-    memoryMonitor.displayMemoryTable();
-  }
-  if (msg === "force_garbage_collector") {
-    memoryMonitor.forceGC();
-  }
-})
-
 let isInit = true
 let handler = await import('./handler')
 global.reloadHandler = async function(restatConn: boolean) {
@@ -387,6 +383,9 @@ function getAllTsFiles(dirPath: string, arrayOfFiles: string[] = []) {
 
   files.forEach(file => {
     const fullPath = path.join(dirPath, file);
+
+    if (file.endsWith('_utils') || file.endsWith('_utils.ts')) return;
+
     if (fs.statSync(fullPath).isDirectory()) {
       getAllTsFiles(fullPath, arrayOfFiles);
     } else if (file.endsWith(".ts")) {
@@ -404,6 +403,8 @@ global.plugins = {}
 
 for (let fullPath of tsFiles) {
   const filename = path.relative(pluginFolder, fullPath);
+
+  if (filename.includes('_utils' + path.sep) || filename.endsWith('_utils.ts')) continue;
 
   try {
     const file = path.join(pluginFolder, filename);
@@ -620,19 +621,62 @@ async function _quickTest() {
 
 _quickTest()
   .then(() => conn.logger.info('Quick Test Done'))
-  .catch(console.error)
+  .catch(console.error);
 
-async function gracefulShutdown(signal: string) {
+let isShuttingDown = false;  
+
+async function gracefulShutdown(signal: string) {    
+  if (isShuttingDown) {
+    conn.logger.warn(`Shutdown already in progress, ignoring ${signal}`);
+    return;
+  }
+  
+  isShuttingDown = true;
+  
   conn.logger.info(`\n${signal} received. Starting graceful shutdown...`);
-
+  
+  if (global.conn) {
+    global.conn.isShuttingDown = true;
+  }
+  
   try {
+    if (global.conn?.ev) {
+      conn.logger.info('Removing event listeners...');
+      global.conn.ev.removeAllListeners();
+    }
+    
     if (global.conn?.ws) {
       conn.logger.info('Closing WhatsApp connection...');
-      global.conn.ws.close();
+      await new Promise<void>((resolve) => {
+        const timeout = setTimeout(() => {
+          conn.logger.warn('WebSocket close timeout, forcing...');
+          resolve();
+        }, 3000);
+        
+        try {
+          global.conn.ws.close();
+          // Wait a bit for close event
+          setTimeout(() => {
+            clearTimeout(timeout);
+            resolve();
+          }, 1000);
+        } catch (e) {
+          conn.logger.error('Error closing WebSocket:', e);
+          clearTimeout(timeout);
+          resolve();
+        }
+      });
     }
 
     conn.logger.info('Running cleanup handlers...');
     await cleanupManager.cleanup();
+    
+    if (global.db?.data) {
+      conn.logger.info('Final database save...');
+      await global.db.write().catch((e: any) => {
+        conn.logger.error('Failed to save database:', e);
+      });
+    }
 
     const stats = cleanupManager.getStats();
     conn.logger.info(`Cleanup complete: ${JSON.stringify(stats)}`);
@@ -648,6 +692,32 @@ async function gracefulShutdown(signal: string) {
 
 process.on('SIGINT', () => gracefulShutdown('SIGINT'));
 process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
-process.on('exit', () => {
-  conn.logger.info('Process exiting...');
+process.on('SIGHUP', () => gracefulShutdown('SIGHUP'));
+process.on('SIGQUIT', () => gracefulShutdown('SIGQUIT'));
+
+process.on('uncaughtException', async (error) => {
+  conn.logger.error('Uncaught Exception:', error);
+  await gracefulShutdown('UNCAUGHT_EXCEPTION');
+});
+
+process.on('unhandledRejection', async (reason, promise) => {
+  conn.logger.error('Unhandled Rejection at:', promise, 'reason:', reason);
+  // Don't exit on unhandled rejection, just log it
+  // await gracefulShutdown('UNHANDLED_REJECTION');
+});
+
+process.on('exit', (code) => {
+  conn.logger.info(`Process exiting with code: ${code}`);
+});
+
+process.on('message', async (msg) => {
+  if (msg === 'shutdown') {
+    await gracefulShutdown('PM2_SHUTDOWN');
+  }
+  if (msg === "get_memory_stats") {
+    memoryMonitor.displayMemoryTable();
+  }
+  if (msg === "force_garbage_collector") {
+    memoryMonitor.forceGC();
+  }
 });
