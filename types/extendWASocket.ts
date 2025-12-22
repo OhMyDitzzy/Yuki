@@ -106,7 +106,7 @@ export interface ExtendedWASocket extends WASocket {
 
   sendFile(
     jid: string,
-    path: string,
+    path: string | Buffer<ArrayBuffer>,
     filename?: string,
     caption?: string,
     quoted?: MiscMessageGenerationOptions,

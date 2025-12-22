@@ -60,6 +60,12 @@ function start(file: string) {
       console.log('[🔄] Restarting worker due to non-zero exit code...');
       return start(file);
     }
+    
+    if (code === 0) {
+      console.log(`\033[1mCleaning up the process because it received the exit code: ${code}\033[0m`)
+      p.kill();
+      process.exit(0);
+    }
 
     watchFile(args[0] as any, () => {
       unwatchFile(args[0] as any);
@@ -79,6 +85,8 @@ function start(file: string) {
             currentWorker.send('get_memory_stats');
           } else if (cmd === "fc_gc" || cmd === "force_gc") {
             currentWorker.send('force_garbage_collector');
+          } else if (cmd === "shutdown") {
+            currentWorker.send('shutdown');
           } else {
             currentWorker.emit('message', line.trim());
           }

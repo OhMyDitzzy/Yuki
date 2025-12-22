@@ -20,10 +20,12 @@ let handler: PluginHandler = {
       return m.reply("Videos must be under 10 seconds long");
     }
 
+    m.react("⏳");    
     let media: any;
     try {
       media = await q.download();
     } catch (e: any) {
+      m.react("❌");
       return m.reply('Failed to fetch Media: ' + e.message);
     }
 
@@ -32,6 +34,8 @@ let handler: PluginHandler = {
       const [packname, author] = text.split(/[,|\-+&]/);
       exif = { packName: packname?.trim() || '', packPublish: author?.trim() || '' };
     }
+    
+    m.react("✅");
     return conn!!.sendSticker(m.chat, media, m, exif);
   }
 }
