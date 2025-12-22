@@ -27,7 +27,7 @@ class CommandCache {
    * need to check each plugin.cmd one by one.
    */
   build(plugins: Record<string, PluginHandler>) {
-    conn.logger.info('🔄 Building command cache...');
+    conn.logger.info('Building command cache...');
 
     this.cache.clear();
     this.regexCommands = [];
@@ -70,7 +70,7 @@ class CommandCache {
       }
     }
 
-    conn.logger.info(`✅ Command cache built: ${cachedCount} string commands, ${regexCount} regex commands`);
+    conn.logger.info(`Command cache built: ${cachedCount} string commands, ${regexCount} regex commands`);
   }
 
   find(command: string): CachedCommand | null {

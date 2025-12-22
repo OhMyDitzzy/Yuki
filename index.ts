@@ -4,6 +4,19 @@ import { dirname, join } from "node:path";
 import { createInterface } from "node:readline";
 import { fileURLToPath } from "node:url";
 import yargs from "yargs";
+import cfonts from "cfonts";
+
+cfonts.say('YUKI', {
+  font: 'slick',
+  align: 'center',
+  colors: ['blue']
+})
+
+cfonts.say('Source Code: https://github.com/OhMyDitzzy/Yuki', {
+  font: 'console',
+  align: 'center',
+  colors: ['green']
+})
 
 var isInit: boolean = false;
 let currentWorker: cluster.Worker | null = null;
@@ -51,16 +64,16 @@ function start(file: string) {
   p.on('exit', (code, _) => {
     isInit = false;
     console.error('[❗] Exited with code:', code);
- 
+
     if (currentWorker === p) {
       currentWorker = null;
     }
-    
+
     if (code !== 0) {
       console.log('[🔄] Restarting worker due to non-zero exit code...');
       return start(file);
     }
-    
+
     if (code === 0) {
       console.log(`\033[1mCleaning up the process because it received the exit code: ${code}\033[0m`)
       p.kill();
