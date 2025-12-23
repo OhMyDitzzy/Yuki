@@ -1628,8 +1628,8 @@ END:VCARD`.trim();
     },
 
     getName: {
-      value(jid = "", withoutContact = false) {
-        jid = conn.decodeJid(jid);
+      async value(jid = "", withoutContact = false) {
+        jid = await conn.decodeJid(jid);
         withoutContact = conn.withoutContact || withoutContact;
         let v: any;
         if (jid.endsWith("@g.us"))
@@ -1723,7 +1723,7 @@ END:VCARD`.trim();
     processMessageStubType: {
       async value(m: any) {
         if (!m.messageStubType) return;
-        const chat = conn.decodeJid(
+        const chat = await conn.decodeJid(
           m.key.remoteJid ||
           m.message?.senderKeyDistributionMessage?.groupId ||
           "",
@@ -1789,15 +1789,15 @@ END:VCARD`.trim();
                 _mtype[1] !== "messageContextInfo" &&
                 _mtype[1]) ||
               _mtype[_mtype.length - 1];
-            const chat = conn.decodeJid(
+            const chat = await conn.decodeJid(
               message.key.remoteJid ||
               message.message?.senderKeyDistributionMessage?.groupId ||
               "",
             );
             if (message.message?.[mtype!!]?.contextInfo?.quotedMessage) {
               let context: any = message.message[mtype!!].contextInfo;
-              let participant = conn.decodeJid(context.participant);
-              const remoteJid = conn.decodeJid(
+              let participant = await conn.decodeJid(context.participant);
+              const remoteJid = await conn.decodeJid(
                 context.remoteJid || participant,
               );
 
@@ -1865,7 +1865,7 @@ END:VCARD`.trim();
                 if (!chats.subject) chats.subject = metadata.subject || "";
                 if (!chats.metadata) chats.metadata = metadata;
               }
-              sender = conn.decodeJid(
+              sender = await conn.decodeJid(
                 (message.key?.fromMe && conn.user.id) ||
                 message.participant ||
                 message.key?.participant ||
@@ -2709,11 +2709,15 @@ export function protoType() {
         server: "s.whatsapp.net",
         user: "",
       };
-      return (
-        (decode.user && decode.server && decode.user + "@" + decode.server) ||
-        this
-      ).trim();
-    } else return this.trim();
+
+      const result = decode.user && decode.server
+        ? `${decode.user}@${decode.server}`
+        : this.toString();
+
+      return result.trim();
+    } else {
+      return this.trim();
+    }
   };
 
   Number.prototype.toTimeString = function toTimeString() {

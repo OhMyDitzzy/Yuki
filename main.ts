@@ -76,6 +76,10 @@ const connOptions: UserFacingSocketConfig = {
 global.conn = makeWASocket(connOptions);
 conn.isInit = false;
 conn.isShuttingDown = false;
+global.startupTime = Date.now();
+global.isProcessingPending = false;
+global.pendingMessagesCount = 0;
+global.lastPendingMessageTime = 0;
 
 const cleanupManager = new CleanupManager();
 const memoryMonitor = new MemoryMonitor(conn.logger, cleanupManager, {
@@ -125,12 +129,19 @@ async function connectionUpdate(update: any) {
 
   if (isNewLogin) {
     conn.isInit = true;
+    global.startupTime = Date.now();
+    global.isProcessingPending = false;
+    global.pendingMessagesCount = 0;
+    global.lastPendingMessageTime = 0;
   }
 
-  if (connection == 'connecting') {
+  if (connection == 'connecting') {    
     conn.logger.warn('Activating Bot, Please wait a moment...');
+    global.isProcessingPending = false;
+    global.pendingMessagesCount = 0;
   } else if (connection == 'open') {
     conn.logger.info('Connected... ✓');
+    global.startupTime = Date.now();
   }
 
   if (isOnline == true) {
@@ -140,7 +151,32 @@ async function connectionUpdate(update: any) {
   }
 
   if (receivedPendingNotifications) {
-    conn.logger.warn('Waiting for New Messages');
+    global.isProcessingPending = true;
+    global.pendingMessagesCount = 0;
+    global.lastPendingMessageTime = Date.now();
+    conn.logger.warn('Processing pending messages...');
+    const checkInterval = setInterval(() => {
+      const timeSinceLastPending = Date.now() - global.lastPendingMessageTime;
+   
+      if (timeSinceLastPending > 5000) {
+        clearInterval(checkInterval);
+        global.isProcessingPending = false;
+        global.startupTime = Date.now();
+        conn.logger.info(`Processed ${global.pendingMessagesCount} pending messages. Ready for new messages ✓`);
+        global.pendingMessagesCount = 0;
+      }
+    }, 1000);
+    
+    setTimeout(() => {
+      if (global.isProcessingPending) {
+        clearInterval(checkInterval);
+        global.isProcessingPending = false;
+        global.startupTime = Date.now();
+        conn.logger.warn(`Timeout: Force stopped processing pending messages after processing ${global.pendingMessagesCount} messages`);
+        global.pendingMessagesCount = 0;
+      }
+    }, 60000);
+    conn.logger.warn('Waiting for New Messages...');
   }
 
   if (connection == 'close') {

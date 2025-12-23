@@ -9,6 +9,10 @@ declare global {
   var prefix: any;
   var commandCache: CommandCache;
   var db: Low<any>;
+  var startupTime: number;
+  var isProcessingPending: boolean;
+  var pendingMessagesCount: number;
+  var lastPendingMessageTime: number;
   var loadDatabase: () => Promse<void>;
   var conn: ExtendedWASocket;
 }

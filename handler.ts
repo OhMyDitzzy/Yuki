@@ -16,6 +16,50 @@ export async function handler(chatUpdate: BaileysEventMap["messages.upsert"]) {
   this.pushMessage(chatUpdate.messages).catch(console.error);
   let m = chatUpdate.messages[chatUpdate.messages.length - 1] as ExtendedWAMessage;
   if (!m) return;
+  let isPendingMessage = false;
+  if (m.messageTimestamp) {
+    const msgTime = (typeof m.messageTimestamp === 'number' 
+      ? m.messageTimestamp 
+      : (m.messageTimestamp.low || m.messageTimestamp.high || parseInt(m.messageTimestamp))
+    ) * 1000;
+    
+    if (msgTime > 0 && msgTime < global.startupTime) {
+      isPendingMessage = true;
+    }
+  }
+  
+  if (global.isProcessingPending && isPendingMessage) {
+    global.pendingMessagesCount++;
+    global.lastPendingMessageTime = Date.now();
+    
+    if (global.pendingMessagesCount % 10 === 0) {
+      this.logger?.info?.(`Processing pending messages: ${global.pendingMessagesCount}...`);
+    }
+    
+    return;
+  }
+  
+  if (global.isProcessingPending && !isPendingMessage) {
+    this.logger?.debug?.(`Queuing new message while processing pending...`);
+
+    let waitCount = 0;
+    while (global.isProcessingPending && waitCount < 30) {
+      await delay(1000);
+      waitCount++;
+    }
+    
+    if (global.isProcessingPending) {
+      this.logger?.warn?.(`Force processing new message after 30s wait`);
+      global.isProcessingPending = false;
+      global.startupTime = Date.now();
+    }
+  }
+  
+  if (isPendingMessage) {
+    this.logger?.debug?.(`Skipping old message`);
+    return;
+  }
+  
   if (global.db.data != null) await loadDatabase();
   if (m.mtype === "templateButtonReplyMessage") this.appenTextMessage(m.msg.selectedId, chatUpdate)
   try {
