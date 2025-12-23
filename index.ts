@@ -19,6 +19,7 @@ cfonts.say('Source Code: https://github.com/OhMyDitzzy/Yuki', {
 })
 
 var isInit: boolean = false;
+let isResetting = false;
 let currentWorker: cluster.Worker | null = null;
 const rl = createInterface(process.stdin, process.stdout);
 
@@ -47,9 +48,9 @@ function start(file: string) {
     console.log('[RECEIVED]', data);
     switch (data) {
       case 'reset':
+        isResetting = true;
         p.kill();
         isInit = false;
-        start(file);
         break;
       case 'uptime':
         if (!p.isDead()) {
@@ -68,13 +69,19 @@ function start(file: string) {
     if (currentWorker === p) {
       currentWorker = null;
     }
+    
+    if (isResetting) {
+      console.log('[🔄] Restarting worker due to reset command...');
+      isResetting = false;
+      return start(file);
+    }
 
     if (code !== 0) {
       console.log('[🔄] Restarting worker due to non-zero exit code...');
       return start(file);
     }
 
-    if (code === 0) {
+    if (code === 0 && !isResetting) {
       console.log(`\033[1mCleaning up the process because it received the exit code: ${code}\033[0m`)
       p.kill();
       process.exit(0);
