@@ -1,7 +1,8 @@
 import type { PluginHandler } from "@yuki/types";
 import sharp from "sharp";
-import { unlink } from "fs/promises";
+import { unlink, mkdir, writeFile, rm } from "fs/promises";
 import { randomBytes } from "crypto";
+import path from "path";
 
 let handler: PluginHandler = {
   name: "Convert sticker/audio to video",
@@ -24,20 +25,92 @@ let handler: PluginHandler = {
 
     try {
       if (/webp/.test(mime)) {
-        const tempFile = `/tmp/video-${randomBytes(8).toString('hex')}.mp4`;
+        const tempDir = `/tmp/frames-${randomBytes(8).toString('hex')}`;
+        const tempOutputFile = `/tmp/video-${randomBytes(8).toString('hex')}.mp4`;
+        let metadata;
+        try {
+          metadata = await sharp(media, { animated: true }).metadata();
+        } catch (e) {
+          metadata = await sharp(media).metadata();
+        }
 
-        const metadata = await sharp(media, { animated: true }).metadata();
         const isAnimated = (metadata.pages || 1) > 1;
 
         if (isAnimated) {
-          // Since WhatsApp uses ".was" as the animated sticker format, we can't get the frames easily.
-          // TODO: We have to find another way, for example, is it true that .was format is for animated stickers?
-          // If not, then we can easily extract the frame.
-          m.react("❌");
-          return m.reply("❌ You can't convert animated stickers to videos at this time.")
+          await mkdir(tempDir, { recursive: true });
+
+          const frameCount = metadata.pages || 1;
+          const delay = metadata.delay || [];
+          const avgDelay = delay.length > 0 
+            ? delay.reduce((a, b) => a + b, 0) / delay.length 
+            : 40;
+          const fps = Math.round(1000 / avgDelay);
+
+          const totalFramesNeeded = fps * 5;
+          const loopCount = Math.ceil(totalFramesNeeded / frameCount);
+          
+          let frameIndex = 0;
+          for (let loop = 0; loop < loopCount; loop++) {
+            for (let i = 0; i < frameCount; i++) {
+              const framePath = path.join(tempDir, `frame_${frameIndex.toString().padStart(4, '0')}.png`);
+              
+              try {
+                await sharp(media, { 
+                  page: i
+                })
+                  .resize(512, 512, {
+                    fit: 'contain',
+                    background: { r: 255, g: 255, b: 255, alpha: 1 }
+                  })
+                  .png()
+                  .toFile(framePath);
+                
+                frameIndex++;                
+              } catch (frameErr) {
+                console.error(`Error extracting frame ${i} (loop ${loop}):`, frameErr);
+              }
+            }
+          }
+
+          const proc = Bun.spawn([
+            "ffmpeg",
+            "-framerate", Math.max(fps, 10).toString(),
+            "-i", path.join(tempDir, "frame_%04d.png"),
+            "-f", "lavfi",
+            "-i", "anullsrc=channel_layout=stereo:sample_rate=44100",
+            "-c:v", "libx264",
+            "-c:a", "aac",
+            "-b:a", "128k",
+            "-pix_fmt", "yuv420p",
+            "-shortest",
+            "-movflags", "+faststart",
+            "-y",
+            tempOutputFile
+          ], {
+            stderr: "pipe",
+          });
+
+          const stderrText = await new Response(proc.stderr).text();
+          const exitCode = await proc.exited;
+
+          await rm(tempDir, { recursive: true, force: true }).catch(() => {});
+
+          if (exitCode !== 0) {
+            console.error("FFmpeg stderr:", stderrText);
+            throw new Error(`FFmpeg failed with exit code ${exitCode}`);
+          }
+
+          out = Buffer.from(await Bun.file(tempOutputFile).arrayBuffer());
+          await unlink(tempOutputFile).catch(() => {});
+
         } else {
+          const tempOutputFile = `/tmp/video-${randomBytes(8).toString('hex')}.mp4`;
+          
           const pngBuffer = await sharp(media)
-            .flatten({ background: '#ffffff' })
+            .resize(512, 512, {
+              fit: 'contain',
+              background: { r: 255, g: 255, b: 255, alpha: 1 }
+            })
             .png()
             .toBuffer();
 
@@ -53,10 +126,10 @@ let handler: PluginHandler = {
             "-b:a", "128k",
             "-pix_fmt", "yuv420p",
             "-t", "3",
-            "-vf", "scale=512:512:force_original_aspect_ratio=decrease,pad=512:512:(ow-iw)/2:(oh-ih)/2:white",
+            "-shortest",
             "-movflags", "+faststart",
             "-y",
-            tempFile
+            tempOutputFile
           ], {
             stdin: "pipe",
             stderr: "pipe",
@@ -72,11 +145,10 @@ let handler: PluginHandler = {
             console.error("FFmpeg stderr:", stderrText);
             throw new Error(`FFmpeg failed with exit code ${exitCode}`);
           }
+
+          out = Buffer.from(await Bun.file(tempOutputFile).arrayBuffer());
+          await unlink(tempOutputFile).catch(() => {});
         }
-
-        out = Buffer.from(await Bun.file(tempFile).arrayBuffer());
-
-        await unlink(tempFile).catch(() => { });
 
         if (out.length === 0) {
           throw new Error("Output file is empty");
@@ -116,7 +188,7 @@ let handler: PluginHandler = {
         }
 
         out = Buffer.from(await Bun.file(tempFile).arrayBuffer());
-        await unlink(tempFile).catch(() => { });
+        await unlink(tempFile).catch(() => {});
 
         if (out.length === 0) {
           throw new Error("Output file is empty");
