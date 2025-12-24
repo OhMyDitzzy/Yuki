@@ -18,6 +18,8 @@ Yuki is a modern, high-performance WhatsApp bot built exclusively for [Bun](http
 
 ---
 
+### [Join WhatsApp Channel →](https://whatsapp.com/channel/0029Vb7AafUL7UVRIpg1Fy24)
+
 ## ✨ Features
 
 - [x] **Pairing Code Support** - Easy setup without QR scanning
