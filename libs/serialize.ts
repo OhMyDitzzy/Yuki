@@ -218,51 +218,58 @@ export function makeWASocket(
         return jid.decodeJid()
       },
     },
-    getJidFromLid: {
-      async value(lid: string) {
-        if (lid.endsWith("@s.whatsapp.net")) {
-          return lid; // if it's already @s.whatsapp.net
+    getJid: {
+      async value(input: string) {
+        if (!input) return null
+        const cleanInput = input.replace(/:\d+@/g, '@')
+
+        if (cleanInput.endsWith("@s.whatsapp.net")) {
+          return cleanInput
         }
 
-        let lidSender = await (sock as ExtendedWASocket).signalRepository.lidMapping.getPNForLID(lid);
-        let jid = lidSender!.replace(/:\d+/, "")
-        return jid;
-      }
-    },
-    getJid: {
-      value(sender: any) {
-        if (!conn.isLid) conn.isLid = {};
-        if (!sender) return sender;
+        if (cleanInput.endsWith("@lid")) {
+          try {
+            const pn = await conn.signalRepository.lidMapping.getPNForLID(cleanInput)
+            if (!pn) throw new Error("Failed to convert LID to JID")
 
-        let s = (String as any)(sender).decodeJid();
-        if (conn.isLid[s]) return conn.isLid[s];
-        if (/@(s\.whatsapp\.net|g\.us|broadcast)$/.test(s)) return s;
-        if (/^\d+$/.test(s)) return (conn.isLid[s] = `${s}@s.whatsapp.net`);
-        if (!s.endsWith("@lid")) return s;
-        let chat: any;
-        for (chat of Object.values(conn.chats)) {
-          const parts = chat!.metadata?.participants || [];
-          if (!parts.length) continue;
-          const user = parts.find(
-            (p: any) => p?.lid === s || p?.id === s || p?.jid === s,
-          );
-          if (user) {
-            const resolved =
-              user.id ||
-              user.jid ||
-              (user.phoneNumber
-                ? `${String(user.phoneNumber).replace(/[^0-9]/g, "")}@s.whatsapp.net`
-                : null);
-            if (resolved) {
-              conn.isLid[s] = resolved.decodeJid
-                ? resolved.decodeJid()
-                : (String as any)(resolved).decodeJid();
-              return conn.isLid[s];
-            }
+            return pn.replace(/:\d+@/g, '@')
+          } catch (error) {
+            console.error("Error converting LID to JID:", error)
+            throw new Error("An error occurred while converting LID to JID")
           }
         }
-        return s;
+
+        const cleanNumber = input.replace(/[^0-9]/g, '')
+        if (cleanNumber) {
+          return `${cleanNumber}@s.whatsapp.net`
+        }
+
+        throw new Error("Invalid input format for getJid")
       },
+      enumerable: true
+    },
+
+    getLid: {
+      async value(jid: string) {
+        if (!jid) return null
+
+        const cleanJid = jid.replace(/:\d+@/g, '@')
+
+        if (cleanJid.endsWith("@lid")) {
+          return cleanJid
+        }
+
+        try {
+          const lid = await conn.signalRepository.lidMapping.getLIDForPN(cleanJid)
+          if (!lid) throw new Error("An error occurred while converting jid to lid")
+
+          return lid.replace(/:\d+@/g, '@')
+        } catch (error) {
+          console.error("Error converting JID to LID:", error)
+          throw new Error("An error occurred while converting jid to lid")
+        }
+      },
+      enumerable: true
     },
     logger: {
       get() {
@@ -2042,15 +2049,13 @@ export function serialize() {
     },
     sender: {
       get() {
-        if (this.key?.fromMe) return (this.conn?.user?.jid || "").decodeJid();
-        const raw =
-          this.key?.participantAlt || this.key?.remoteJidAlt || this.key?.participant || this.chat;
-        if (raw.endsWith("@lid")) {
-          return this.conn.getJidFromLid(raw)
-        }
-        return this.conn.getJid((String(raw) as any).decodeJid());
+        if (this.key?.fromMe) return (this.conn?.user?.lid || '').decodeJid()
+        const raw = (this.key.participant || this.chat || '');
+        // there is no point to search jid again
+        // its time to migrate to LID
+        return String(raw).decodeJid();
       },
-      enumerable: true,
+      enumerable: true
     },
     fromMe: {
       get() {
@@ -2191,19 +2196,10 @@ export function serialize() {
             },
             sender: {
               get() {
-                const raw = (
-                  self.key.participantAlt ||
-                  self.key.remoteJidAlt ||
-                  contextInfo.participant ||
-                  this.chat ||
-                  ""
-                ).decodeJid();
-                if (raw.endsWith("@lid")) {
-                  return conns.getJidFromLid(raw);
-                }
-                return conns.getJid(raw);
+                const raw = (contextInfo.participant || this.chat || "");
+                return String(raw).decodeJid();
               },
-              enumerable: true,
+              enumerable: true
             },
             fromMe: {
               get() {
@@ -2225,13 +2221,10 @@ export function serialize() {
             },
             mentionedJid: {
               get() {
-                let raw =
-                  q.contextInfo?.mentionedJid ||
-                  self.getQuotedObj()?.mentionedJid ||
-                  [];
-                return raw.map((jid: any) => conns.getJid(jid));
+                let raw = q.contextInfo?.mentionedJid || self.getQuotedObj()?.mentionedJid || []
+                return raw.map((jid: string) => String(jid).decodeJid())
               },
-              enumerable: true,
+              enumerable: true
             },
             name: {
               get() {
@@ -2507,13 +2500,10 @@ export function serialize() {
     },
     mentionedJid: {
       get() {
-        let raw =
-          (this.msg?.contextInfo?.mentionedJid?.length &&
-            this.msg.contextInfo.mentionedJid) ||
-          [];
-        return raw.map((jid: any) => this.conn.getJid(jid));
+        let raw = this.msg?.contextInfo?.mentionedJid?.length && this.msg.contextInfo.mentionedJid || [];
+        return raw.map((jid: string) => String(jid).decodeJid());
       },
-      enumerable: true,
+      enumerable: true
     },
     name: {
       get() {

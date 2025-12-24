@@ -18,9 +18,17 @@ interface HandlerContext {
   isBans?: boolean;
   groupMetadata?: any;
   delay?(angka: number): Promise<void>;
+  participants?: any;
   noPrefix?: string;
   usedPrefix?: string;
   chatUpdate?: BaileysEventMap["messages.upsert"];
+  checkTarget?(targetJid: string): Promise<{
+    targetROwner: boolean;
+    targetMods: boolean;
+    targetRAdmin: boolean;
+    targetAdmin: boolean;
+    targetUser: any;
+  }>;
 }
 
 export interface PluginHandler {
@@ -33,6 +41,7 @@ export interface PluginHandler {
   help?: string[];
   group?: boolean;
   banned?: boolean;
+  botAdmin?: boolean;
   premium?: boolean;
   mods?: boolean;
   owner?: boolean;

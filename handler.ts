@@ -5,7 +5,7 @@ import util from "node:util";
 import fs from "node:fs";
 import { initializeDatabase } from "./libs/database-initializer";
 import { assignStaffRole, StaffRole, updateUserRole } from "libs/role-system.ts";
-import type { ExtendedWASocket } from "libs/store.ts";
+import type { ExtendedWASocket } from "types/extendWASocket.ts";
 
 const isNumber = (x: number) => typeof x === 'number' && !isNaN(x)
 const delay = (ms: number) => isNumber(ms) && new Promise(resolve => setTimeout(resolve, ms))
@@ -24,7 +24,7 @@ export async function handler(chatUpdate: BaileysEventMap["messages.upsert"]) {
     m.exp = 0;
     m.limit = false;
     try {
-      initializeDatabase(m, this.user.jid);
+      initializeDatabase(m, await this.getLid(this.user.lid));
     } catch (e) {
       console.error(e)
     }
@@ -40,9 +40,14 @@ export async function handler(chatUpdate: BaileysEventMap["messages.upsert"]) {
     if (opts['swonly'] && m.chat !== 'status@broadcast') return;
     if (typeof m.text !== 'string') m.text = '';
     const body = typeof m.text == 'string' ? m.text : false;
-    const isROwner = [conn.decodeJid(this.user.id), ...global.owner.map(([number, _]) => number)].map(v => v.replace(/[^0-9]/g, '') + '@s.whatsapp.net').includes(m.sender);
+    const senderLid = await this.getLid(m.sender)
+
+    const ownerLids = await Promise.all([conn.decodeJid(this.user.id), ...global.owner.map(([number, _]) => number)].map(v => v.replace(/[^0-9]/g, '') + '@s.whatsapp.net').map(jid => this.getLid(jid)))
+
+    const isROwner = ownerLids.includes(senderLid)
     const isOwner = isROwner || m.fromMe;
-    const isMods = isOwner || global.mods.map((v: any) => v.replace(/[^0-9]/g, '') + '@s.whatsapp.net').includes(m.sender);
+    const modsLids = await Promise.all(global.mods.map((v: any) => v.replace(/[^0-9]/g, '') + '@s.whatsapp.net').map(jid => this.getLid(jid)))
+    const isMods = isOwner || modsLids.includes(senderLid)
     const isPrems = isROwner || global.db.data.users[m.sender].premiumTime > 0;
     const isBans = global.db.data.users[m.sender].banned;
 
@@ -52,7 +57,7 @@ export async function handler(chatUpdate: BaileysEventMap["messages.upsert"]) {
       global.db.data.users[m.sender].premiumDate = "infinity";
       global.db.data.users[m.sender].limit = "infinity";
       assignStaffRole(global.db.data.users[m.sender], StaffRole.OWNER)
-    } else {
+    } else if (isMods) {
       assignStaffRole(global.db.data.users[m.sender], StaffRole.MODERATOR);
     }
 
@@ -74,13 +79,54 @@ export async function handler(chatUpdate: BaileysEventMap["messages.upsert"]) {
     let _user = global.db.data && global.db.data.users && global.db.data.users[m.sender]
     const groupMetadata = (m.isGroup ? (conn.chats[m.chat] || {}).metadata : {}) || {}
     const participants = (m.isGroup ? groupMetadata.participants : []) || []
-    const user = (m.isGroup ? participants.find((u: any) => u.phoneNumber === m.sender) : {}) || {}
-    const bot = (m.isGroup ? participants.find((u: any) => u.phoneNumber == this.user.jid) : {}) || {};
-    const isRAdmin = user && user.admin == 'superadmin' || false
-    // is the user admin?
-    const isAdmin = isRAdmin || user && user.admin == 'admin' || false
-    // Is the bot Admin?
-    const isBotAdmin = bot && bot.admin || false
+    const botLid = await this.getLid(this.user.id)
+    let user: any
+    let bot: any
+
+    for (const p of participants) {
+      const lid = await this.getLid(p.id)
+      if (lid === senderLid) user = p
+      if (lid === botLid) bot = p
+    }
+
+    const isRAdmin = user?.admin === 'superadmin'
+    const isAdmin = isRAdmin || user?.admin === 'admin'
+    const isBotAdmin = !!bot?.admin;
+
+    const checkTarget = async (targetJid: string) => {
+      if (!targetJid || !m.isGroup) return {
+        targetROwner: false,
+        targetMods: false,
+        targetRAdmin: false,
+        targetAdmin: false,
+        targetUser: null
+      }
+
+      const targetLid = await this.getLid(targetJid)
+      const targetROwner = ownerLids.includes(targetLid)
+      const targetMods = targetROwner || modsLids.includes(targetLid)
+
+      let targetUser: any = null
+      for (const p of participants) {
+        const lid = await this.getLid(p.id)
+        if (lid === targetLid) {
+          targetUser = p
+          break
+        }
+      }
+
+      const targetRAdmin = targetUser?.admin === 'superadmin'
+      const targetAdmin = targetRAdmin || targetUser?.admin === 'admin'
+
+      return {
+        targetROwner,
+        targetMods,
+        targetRAdmin,
+        targetAdmin,
+        targetUser
+      }
+    }
+
     for (let name in global.plugins) {
       let plugin = global.plugins[name];
       if (!plugin) continue;
@@ -105,23 +151,27 @@ export async function handler(chatUpdate: BaileysEventMap["messages.upsert"]) {
       const usePrefix = plugin.usePrefix !== false;
       let match: any;
 
+      const prefixMatch = (_prefix instanceof RegExp ?
+        [[_prefix.exec(m.text), _prefix]] :
+        Array.isArray(_prefix) ?
+          _prefix.map(p => {
+            let re = p instanceof RegExp ?
+              p :
+              new RegExp(str2Regex(p))
+            return [re.exec(m.text), re]
+          }) :
+          typeof _prefix === 'string' ?
+            [[new RegExp(str2Regex(_prefix)).exec(m.text), new RegExp(str2Regex(_prefix))]] :
+            [[[], new RegExp]]
+      ).find(p => p[1]);
+
       if (usePrefix) {
-        match = (_prefix instanceof RegExp ? // RegExp Mode?
-          [[_prefix.exec(m.text), _prefix]] :
-          Array.isArray(_prefix) ? // Array?
-            _prefix.map(p => {
-              let re = p instanceof RegExp ? // RegExp in Array?
-                p :
-                new RegExp(str2Regex(p))
-              return [re.exec(m.text), re]
-            }) :
-            typeof _prefix === 'string' ? // String?
-              [[new RegExp(str2Regex(_prefix)).exec(m.text), new RegExp(str2Regex(_prefix))]] :
-              // @ts-ignore
-              [[[], new RegExp]]
-        ).find(p => p[1]);
+        match = prefixMatch;
       } else {
-        match = [[m.text, new RegExp("^")]];
+        match = prefixMatch && prefixMatch[0] && prefixMatch[0][0] ?
+          prefixMatch : // There is a matching prefix, use it.
+          // @ts-ignore
+          [[['', m.text], new RegExp("^")]]; // No prefix, use direct text
       }
 
       if (typeof plugin.before === 'function') if (await plugin.before.call(this, m, {
@@ -140,40 +190,52 @@ export async function handler(chatUpdate: BaileysEventMap["messages.upsert"]) {
         isBans,
         chatUpdate,
       })) continue;
+
       if (typeof plugin.exec !== "function") continue;
+
       let noPrefix: any, command: string, args: any, _args: any, text: string;
 
       if (usePrefix) {
         if ((usedPrefix = (match[0] || '')[0])) {
-          noPrefix = m.text.replace(usedPrefix, '')
-            ;[command, ...args] = noPrefix.trim().split` `.filter((v: any) => v)
-          _args = noPrefix.trim().split` `.slice(1)
-          text = _args.join` `
+          noPrefix = m.text.replace(usedPrefix, '');
+          [command, ...args] = noPrefix.trim().split` `.filter((v: any) => v);
+          _args = noPrefix.trim().split` `.slice(1);
+          text = _args.join` `;
         } else {
-          continue; // Skip if prefix is required but not found
+          continue;
         }
       } else {
-        noPrefix = m.text;
-        [command, ...args] = noPrefix.trim().split` `.filter((v: any) => v)
-        _args = noPrefix.trim().split` `.slice(1)
-        text = _args.join` `
-        usedPrefix = ''; // Empty prefix
+        const hasPrefix = match && match[0] && match[0][0];
+
+        if (hasPrefix) {
+          // There is a prefix, delete the prefix
+          usedPrefix = match[0][0];
+          noPrefix = m.text.replace(usedPrefix, '');
+        } else {
+          // No prefix, use direct text
+          noPrefix = m.text;
+          usedPrefix = '';
+        }
+
+        [command, ...args] = noPrefix.trim().split` `.filter((v: any) => v);
+        _args = noPrefix.trim().split` `.slice(1);
+        text = _args.join` `;
       }
 
-      command = (command || '').toLowerCase()
-      let fail = plugin.fail || global.dfail
-      let isAccept = plugin.cmd instanceof RegExp ? // RegExp Mode?
+      command = (command || '').toLowerCase();
+      let fail = plugin.fail || global.dfail;
+      let isAccept = plugin.cmd instanceof RegExp ?
         plugin.cmd.test(command) :
-        Array.isArray(plugin.cmd) ? // Array?
-          plugin.cmd.some((cmd: any) => cmd instanceof RegExp ? // RegExp in Array?
+        Array.isArray(plugin.cmd) ?
+          plugin.cmd.some((cmd: any) => cmd instanceof RegExp ?
             cmd.test(command) :
             cmd === command
           ) :
-          typeof plugin.cmd === 'string' ? // String?
+          typeof plugin.cmd === 'string' ?
             plugin.cmd === command :
-            false
+            false;
 
-      if (!isAccept) continue
+      if (!isAccept) continue;
       m.plugin = name
       if (m.chat in global.db.data.chats || m.sender in global.db.data.users) {
         let chat = global.db.data.chats[m.chat]
@@ -266,6 +328,7 @@ export async function handler(chatUpdate: BaileysEventMap["messages.upsert"]) {
         isBans,
         delay,
         chatUpdate,
+        checkTarget,
       }
       try {
         await plugin.exec.call(this, m, extra);
@@ -373,7 +436,7 @@ export async function participantsUpdate({ id, participants, action }: BaileysEv
           if (typeof user === 'string') {
             userJid = user;
           } else if (user && typeof user === 'object') {
-            userJid = user.phoneNumber || user.id;
+            userJid = user.phoneNumber || await this.getJid(user.id);
           } else {
             console.error('Cannot extract JID from user:', user);
             continue;
@@ -441,7 +504,7 @@ export async function participantsUpdate({ id, participants, action }: BaileysEv
       if (typeof user === 'string') {
         userJid = user;
       } else if (user && typeof user === 'object') {
-        userJid = user.phoneNumber || user.id;
+        userJid = user.phoneNumber || await this.getJid(user.id);
       } else {
         console.error('Cannot extract JID from user:', user);
         return;

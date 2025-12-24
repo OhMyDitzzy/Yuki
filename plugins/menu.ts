@@ -21,7 +21,7 @@ const tagDisplayNames: Record<string, string> = {
   media: "Media 🎬",
   tools: "Tools 🛠️",
   info: "Info ℹ️",
-  admin: "Admin 🛡️",
+  admin_group: "Admin 🛡️",
   group: "Group 👥",
   search: "Search 🔍",
   ai: "AI 🤖",

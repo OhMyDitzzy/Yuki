@@ -1,5 +1,5 @@
 import "./config"
-import { Browsers, DisconnectReason, getAggregateVotesInPollMessage, makeCacheableSignalKeyStore, useMultiFileAuthState, type UserFacingSocketConfig } from 'baileys';
+import { Browsers, DisconnectReason, makeCacheableSignalKeyStore, useMultiFileAuthState, type UserFacingSocketConfig } from 'baileys';
 import { Low, JSONFile } from 'lowdb';
 import path from 'path';
 import pino from 'pino';
@@ -77,35 +77,6 @@ const connOptions: UserFacingSocketConfig = {
 global.conn = makeWASocket(connOptions);
 conn.isInit = false;
 global.store = bind(global.conn as any)
-
-async function getMessage() {
-  if (global.store) {
-    return store.messages
-  }
-
-  return {
-    conversation: "DitzDev",
-  }
-}
-
-conn.ev.on("messages.update", async (chatUpdate) => {
-  for (const { key, update } of chatUpdate) {
-    if (update.pollUpdates && key.fromMe) {
-      const pollCreation = await getMessage();
-      if (pollCreation) {
-        const pollUpdate = getAggregateVotesInPollMessage({
-          message: pollCreation,
-          pollUpdates: update.pollUpdates
-        });
-
-        var toCmd = pollUpdate.filter(v => v.voters.length !== 0)[0]?.name;
-        if (toCmd == undefined) return;
-        var prefCmd = prefix + toCmd;
-        conn.appenTextMessage(prefCmd, chatUpdate)
-      }
-    }
-  }
-})
 
 const cleanupManager = new CleanupManager();
 const memoryMonitor = new MemoryMonitor(conn.logger, cleanupManager, {
@@ -514,6 +485,56 @@ function setupTmpCleanup() {
           if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(2)}MB`;
           return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)}GB`;
         };
+
+        for (const file of files) {
+          if (file === '.yuki_keep') continue;
+
+          const filePath = path.join(tmpPath, file);
+
+          try {
+            const stats = fs.statSync(filePath);
+
+            if (stats.isDirectory()) continue;
+
+            const shouldKeep = yukiKeepMatcher.shouldKeep(
+              file,
+              filePath,
+              currentConfig.keepRules
+            );
+
+            if (shouldKeep) {
+              keptCount++;
+              continue;
+            }
+
+            const shouldDelete = yukiKeepMatcher.shouldDelete(
+              file,
+              filePath,
+              currentConfig.deleteRules
+            );
+
+            let exceedsMaxAge = false;
+            let exceedsMaxSize = false;
+
+            if (currentConfig.maxAge !== null) {
+              const fileAge = Date.now() - stats.mtimeMs;
+              exceedsMaxAge = fileAge > currentConfig.maxAge;
+            }
+
+            if (currentConfig.maxSize !== null) {
+              exceedsMaxSize = stats.size > currentConfig.maxSize;
+            }
+            if (shouldDelete || exceedsMaxAge || exceedsMaxSize) {
+              deletedSize += stats.size;
+              fs.unlinkSync(filePath);
+              deletedCount++;
+            } else {
+              keptCount++;
+            }
+          } catch (err) {
+            conn.logger.error(`Failed to process file ${file}:`, err);
+          }
+        }
 
         if (deletedCount > 0 || keptCount > 0) {
           conn.logger.info(

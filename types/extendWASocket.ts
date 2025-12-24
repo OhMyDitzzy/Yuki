@@ -36,8 +36,8 @@ export interface ExtendedWASocket extends WASocket {
   isLid?: Record<string, string>;
 
   decodeJid(jid: any): string | null;
-  getJid(sender: any): string;  
-  getJidFromLid(sender: any): string;
+  getJid(sender: any): Promise<string>;
+  getLid(sender: any): Promise<string>;
 
   logger: Logger;
 
