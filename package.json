@@ -2,7 +2,7 @@
   "name": "yuki",
   "description": "A light and fast WhatsApp bot script for Bun.",
   "author": "DitzDev",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "main": "index.ts",
   "type": "module",
   "devDependencies": {
