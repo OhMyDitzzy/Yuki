@@ -115,21 +115,6 @@ const handler: PluginHandler = {
 export default handler;
 ```
 
-### Plugin Properties
-
-| Property | Type | Description |
-|----------|------|-------------|
-| `name` | string | Plugin display name |
-| `cmd` | string[] \| RegExp[] | Commands or regex patterns |
-| `tags` | string | Category (general, owner, fun, etc.) |
-| `desc` | string | Command description |
-| `rowner` | boolean | Restrict to bot owners |
-| `group` | boolean | Only work in groups |
-| `private` | boolean | Only work in private chats |
-| `exec` | function | Main command logic |
-
-That's it! All plugins are automatically loaded when you start the bot. No manual registration needed. For more information about plugin properties, Visit the [types interface for plugins.](types/pluginType.ts)
-
 ## 🎯 Performance
 
 Yuki is engineered for **production stability** and **predictable resource usage**.
@@ -164,7 +149,11 @@ While the bot is running, you can send commands to the worker process via consol
 ```bash
 stats          # Display memory and performance statistics
 fc_gc          # Force garbage collection (manual trigger)
+shutdown     # Force graceful shutdown
 ```
+
+> [!WARNING]
+> It is recommended for you to always use the `shutdown` command when you want to stop the drilling process.
 
 These commands are sent to the worker process using Node.js cluster messaging (`process.on("message")`).
 
