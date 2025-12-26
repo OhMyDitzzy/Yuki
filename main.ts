@@ -1,5 +1,5 @@
 import "./config"
-import { Browsers, DisconnectReason, makeCacheableSignalKeyStore, useMultiFileAuthState, type UserFacingSocketConfig } from 'baileys';
+import { Browsers, DisconnectReason, makeCacheableSignalKeyStore, type UserFacingSocketConfig } from 'baileys';
 import { Low, JSONFile } from 'lowdb';
 import path from 'path';
 import pino from 'pino';
@@ -61,7 +61,20 @@ global.loadDatabase = async function loadDatabase() {
   }
 }
 
-const { state, saveCreds } = await useSQLiteAuthState("data/auth.db");
+const DB_PATH = "data/auth.db";
+
+let authState: any;
+let saveCredsFunction: any;
+
+async function initializeAuthState() {
+  const result = await useSQLiteAuthState(DB_PATH);
+  authState = result.state;
+  saveCredsFunction = result.saveCreds;
+  return result;
+}
+
+const { state, saveCreds } = await initializeAuthState();
+
 const connOptions: UserFacingSocketConfig = {
   logger: pino({ level: "fatal" }),
   browser: Browsers.macOS("Safari"),
@@ -95,7 +108,11 @@ cleanupManager.addCleanupHandler(async () => {
   }
 
   try {
-    closeSQLiteAuthState("data/auth.db");
+    if (saveCredsFunction) {
+      await saveCredsFunction();
+    }
+    
+    closeSQLiteAuthState(DB_PATH);
   } catch (e) {
     console.error('Error closing SQLite:', e);
   }
@@ -174,12 +191,15 @@ async function connectionUpdate(update: any) {
       if (statusCode === DisconnectReason.badSession) {
         conn.logger.error('Bad session. Clearing auth state...');
         try {
+          closeSQLiteAuthState(DB_PATH);
+          await new Promise(resolve => setTimeout(resolve, 1000));
           await fs.promises.unlink('./data/auth.db').catch(() => { });
           await fs.promises.unlink('./data/auth.db-shm').catch(() => { });
           await fs.promises.unlink('./data/auth.db-wal').catch(() => { });
         } catch (e) {
           conn.logger.error('Failed to clear session:', e);
         }
+        process.exit(0);
       }
 
       if (
@@ -188,13 +208,23 @@ async function connectionUpdate(update: any) {
         statusCode === DisconnectReason.connectionReplaced ||
         statusCode === DisconnectReason.timedOut
       ) {
-        conn.logger.warn('Connection issue detected. Attempting reconnect...');
+        conn.logger.warn('Connection issue detected. Attempting reconnect in 5s...');
+        
+        try {
+          if (saveCredsFunction && authState?.creds) {
+            await saveCredsFunction();
+            conn.logger.info('Credentials saved before reconnect');
+          }
+        } catch (e) {
+          conn.logger.error('Failed to save creds before reconnect:', e);
+        }
+        
         setTimeout(async () => {
           try {
             await global.reloadHandler(true);
           } catch (e) {
             conn.logger.error('Reconnect failed:', e);
-            process.exit(0);
+            process.exit(1);
           }
         }, 5000);
         return;
@@ -202,16 +232,35 @@ async function connectionUpdate(update: any) {
 
       if (statusCode === DisconnectReason.restartRequired) {
         conn.logger.warn('Restart required by WhatsApp...');
-        await cleanupManager.cleanup();
+        try {
+          if (saveCredsFunction && authState?.creds) {
+            await saveCredsFunction();
+          }
+        } catch (e) {
+          conn.logger.error('Failed to save creds:', e);
+        }
+        
+        setTimeout(async () => {
+          try {
+            await global.reloadHandler(true);
+          } catch (e) {
+            conn.logger.error('Reconnect failed:', e);
+            process.exit(1);
+          }
+        }, 5000);
+        return;
       }
 
       conn.logger.error(`Unknown disconnect reason: ${statusCode}`);
       setTimeout(async () => {
         try {
+          if (saveCredsFunction && authState?.creds) {
+            await saveCredsFunction();
+          }
           await global.reloadHandler(true);
         } catch (e) {
           conn.logger.error('Reconnect failed:', e);
-          process.exit(0);
+          process.exit(1);
         }
       }, 5000);
     }
@@ -236,11 +285,35 @@ global.reloadHandler = async function(restatConn: boolean) {
   }
 
   if (restatConn) {
-    const oldChats = global.conn.chats
-    try { global.conn.ws.close() } catch { }
-    conn.ev.removeAllListeners("messages.upsert")
-    global.conn = makeWASocket(connOptions, { chats: oldChats })
-    isInit = true
+    const oldChats = global.conn.chats;
+    
+    try { 
+      global.conn.ws.close();
+    } catch { }
+    
+    await new Promise(resolve => setTimeout(resolve, 3000));
+    
+    conn.ev.removeAllListeners();
+    
+    conn.logger.info('Recreating auth state...');
+    const { state: newState, saveCreds: newSaveCreds } = await useSQLiteAuthState(DB_PATH);
+    authState = newState;
+    saveCredsFunction = newSaveCreds;
+    
+    const newConnOptions = {
+      ...connOptions,
+      auth: {
+        creds: authState.creds,
+        keys: makeCacheableSignalKeyStore(authState.keys, pino().child({
+          level: 'silent',
+          stream: 'store'
+        })),
+      }
+    };
+    
+    global.conn = makeWASocket(newConnOptions, { chats: oldChats });
+    global.store = bind(global.conn as any);
+    isInit = true;
   }
 
   if (!isInit) {
@@ -254,9 +327,10 @@ global.reloadHandler = async function(restatConn: boolean) {
   conn.handler = handler.handler.bind(global.conn)
   conn.connectionUpdate = connectionUpdate.bind(global.conn)
   conn.credsUpdate = async function() {
-    await saveCreds.call(global.conn);
-    if (global.conn._updateCleanLid) {
-      await global.conn._updateCleanLid();
+    try {
+      await saveCredsFunction.call(global.conn);
+    } catch (e) {
+      console.error('Error saving creds:', e);
     }
   }.bind(global.conn);
   conn.participantsUpdate = handler.participantsUpdate.bind(global.conn)
