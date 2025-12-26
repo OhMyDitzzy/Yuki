@@ -17,6 +17,7 @@ import { yukiKeepMatcher, yukiKeepParser } from "libs/yukiKeepParser";
 import { CleanupManager } from "libs/cleanupManager";
 import { MemoryMonitor } from "libs/MemoryMonitor";
 import { bind } from "libs/store";
+import { closeSQLiteAuthState, useSQLiteAuthState } from "libs/useSQLAuthState";
 
 function filename(metaUrl = import.meta.url) {
   return fileURLToPath(metaUrl)
@@ -60,7 +61,7 @@ global.loadDatabase = async function loadDatabase() {
   }
 }
 
-const { state, saveCreds } = await useMultiFileAuthState("Yuki");
+const { state, saveCreds } = await useSQLiteAuthState("data/auth.db");
 const connOptions: UserFacingSocketConfig = {
   logger: pino({ level: "fatal" }),
   browser: Browsers.macOS("Safari"),
@@ -91,6 +92,12 @@ cleanupManager.addCleanupHandler(async () => {
   if (global.db && global.db.data) {
     conn.logger.info('Saving database before shutdown...');
     await global.db.write().catch(console.error);
+  }
+
+  try {
+    closeSQLiteAuthState("data/auth.db");
+  } catch (e) {
+    console.error('Error closing SQLite:', e);
   }
 });
 
@@ -167,7 +174,9 @@ async function connectionUpdate(update: any) {
       if (statusCode === DisconnectReason.badSession) {
         conn.logger.error('Bad session. Clearing auth state...');
         try {
-          await fs.promises.rm('./Yuki', { recursive: true, force: true });
+          await fs.promises.unlink('./data/auth.db').catch(() => { });
+          await fs.promises.unlink('./data/auth.db-shm').catch(() => { });
+          await fs.promises.unlink('./data/auth.db-wal').catch(() => { });
         } catch (e) {
           conn.logger.error('Failed to clear session:', e);
         }
