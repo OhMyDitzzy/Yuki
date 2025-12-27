@@ -40,7 +40,7 @@ export async function handler(chatUpdate: BaileysEventMap["messages.upsert"]) {
     if (opts['swonly'] && m.chat !== 'status@broadcast') return;
     if (typeof m.text !== 'string') m.text = '';
     const body = typeof m.text == 'string' ? m.text : false;
-    if (!body || typeof body !== 'string' || body.length === 0) return;
+    // if (!body || typeof body !== 'string' || body.length === 0) return;
 
     const senderLid = await this.getLid(m.sender)
 
@@ -50,7 +50,7 @@ export async function handler(chatUpdate: BaileysEventMap["messages.upsert"]) {
     const isOwner = isROwner || m.fromMe;
     const modsLids = await Promise.all(global.mods.map((v: any) => v.replace(/[^0-9]/g, '') + '@s.whatsapp.net').map((jid: string) => this.getLid(jid)))
     const isMods = isOwner || modsLids.includes(senderLid)
-    const isPrems = isROwner || global.db.data.users[m.sender].premiumTime > 0;
+    const isPrems = isROwner || global.db.data.users[m.sender].premium;
     const isBans = global.db.data.users[m.sender].banned;
 
     if (isROwner) {
