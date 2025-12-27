@@ -73,7 +73,7 @@ async function initializeAuthState() {
   return result;
 }
 
-const { state, saveCreds } = await initializeAuthState();
+const { state } = await initializeAuthState();
 
 const connOptions: UserFacingSocketConfig = {
   logger: pino({ level: "fatal" }),
@@ -111,7 +111,7 @@ cleanupManager.addCleanupHandler(async () => {
     if (saveCredsFunction) {
       await saveCredsFunction();
     }
-    
+
     closeSQLiteAuthState(DB_PATH);
   } catch (e) {
     console.error('Error closing SQLite:', e);
@@ -209,7 +209,7 @@ async function connectionUpdate(update: any) {
         statusCode === DisconnectReason.timedOut
       ) {
         conn.logger.warn('Connection issue detected. Attempting reconnect in 5s...');
-        
+
         try {
           if (saveCredsFunction && authState?.creds) {
             await saveCredsFunction();
@@ -218,7 +218,7 @@ async function connectionUpdate(update: any) {
         } catch (e) {
           conn.logger.error('Failed to save creds before reconnect:', e);
         }
-        
+
         setTimeout(async () => {
           try {
             await global.reloadHandler(true);
@@ -239,7 +239,7 @@ async function connectionUpdate(update: any) {
         } catch (e) {
           conn.logger.error('Failed to save creds:', e);
         }
-        
+
         setTimeout(async () => {
           try {
             await global.reloadHandler(true);
@@ -286,20 +286,20 @@ global.reloadHandler = async function(restatConn: boolean) {
 
   if (restatConn) {
     const oldChats = global.conn.chats;
-    
-    try { 
+
+    try {
       global.conn.ws.close();
     } catch { }
-    
+
     await new Promise(resolve => setTimeout(resolve, 3000));
-    
+    // @ts-ignore
     conn.ev.removeAllListeners();
-    
+
     conn.logger.info('Recreating auth state...');
     const { state: newState, saveCreds: newSaveCreds } = await useSQLiteAuthState(DB_PATH);
     authState = newState;
     saveCredsFunction = newSaveCreds;
-    
+
     const newConnOptions = {
       ...connOptions,
       auth: {
@@ -310,7 +310,7 @@ global.reloadHandler = async function(restatConn: boolean) {
         })),
       }
     };
-    
+
     global.conn = makeWASocket(newConnOptions, { chats: oldChats });
     global.store = bind(global.conn as any);
     isInit = true;
@@ -448,7 +448,16 @@ global.reload = async (filename: string = "") => {
       path.dirname(fullPath)
     );
 
-    const plugin = moduleObj.exports.default || moduleObj.exports;
+    let plugin = moduleObj.exports.default || moduleObj.exports;
+
+    if (moduleObj.exports.default) {
+      plugin = {
+        ...plugin,
+        ...(moduleObj.exports.all && { all: moduleObj.exports.all }),
+        ...(moduleObj.exports.before && { before: moduleObj.exports.before }),
+        ...(moduleObj.exports.after && { after: moduleObj.exports.after }),
+      };
+    }
 
     global.plugins[relPath] = plugin;
     pluginModules.set(fullPath, plugin);
@@ -693,7 +702,7 @@ async function initialize() {
     if (!opts["test"]) {
       const dbSaveInterval = setInterval(async () => {
         if (global.db.data) await global.db.write().catch(console.error);
-      }, 2000);
+      }, 30000);
       cleanupManager.addInterval(dbSaveInterval);
     }
 
