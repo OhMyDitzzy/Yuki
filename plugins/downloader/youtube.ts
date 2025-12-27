@@ -39,15 +39,6 @@ let handler: PluginHandler = {
           },
           mimetype: 'audio/mp4',
           fileName: `${(info as VideoInfo).title}.mp3`,
-          contextInfo: {
-            externalAdReply: {
-              mediaType: 2,
-              mediaUrl: url,
-              title: 'Yuki Botz',
-              body: info.title,
-              thumbnail: (await conn.getFile(info.thumbnail)).data
-            }
-          }
         }, { quoted: m })
         m.react("✅")
       }
