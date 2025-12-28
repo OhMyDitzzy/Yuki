@@ -114,6 +114,8 @@ const handler: PluginHandler = {
 
 export default handler;
 ```
+> [!NOTE]
+> Plugin examples and documentation are available in the folder [example-plugins](example-plugins). 
 
 ## 🎯 Performance
 
