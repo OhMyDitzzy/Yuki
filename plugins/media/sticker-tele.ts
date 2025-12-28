@@ -26,9 +26,9 @@ let handler: PluginHandler = {
     if (conn!!.stickerTeleProcessing[m.sender]) {
       return m.reply(`⚠️ *You are already processing a sticker pack!*\n\nPlease wait until your current request is completed.`);
     }
-    
-    if (Object.keys(conn.stickerTeleProcessing).length > 0) {
-       return m.reply("⚠️ *Another user is currently processing a sticker pack, please wait until the process is complete!*");
+
+    if (Object.keys(conn!!.stickerTeleProcessing).length > 0) {
+      return m.reply("⚠️ *Another user is currently processing a sticker pack, please wait until the process is complete!*");
     }
 
     m.react("⏳");
@@ -243,7 +243,7 @@ _Processing sticker packs, this might take a while..._`.trim());
       const getThumbnailAsFallback = async (stickerData: any): Promise<Buffer | null> => {
         try {
           const thumbnailFileId = stickerData.thumbnail?.file_id || stickerData.thumb?.file_id;
-          
+
           if (!thumbnailFileId) {
             console.log(`No thumbnail available`);
             return null;
@@ -347,8 +347,8 @@ _Processing sticker packs, this might take a while..._`.trim());
         try {
           let stickerData = json.result.stickers[i];
           let fileId = stickerData.file_id;
-          
-          if (stickerData.is_animated) {  
+
+          if (stickerData.is_animated) {
             failedCount++;
             continue;
           }
@@ -360,7 +360,7 @@ _Processing sticker packs, this might take a while..._`.trim());
             let fileUrl = `https://api.telegram.org/file/bot${botToken}/${stickerRJson.result.file_path}`;
             let stickerBuffer = await downloadBuffer(fileUrl);
             let fileType = await fileTypeFromBuffer(stickerBuffer);
-            
+
             let processedBuffer: Buffer | null = null;
             let usedFallback = false;
 
@@ -370,7 +370,7 @@ _Processing sticker packs, this might take a while..._`.trim());
               } else if (fileType?.mime === "image/webp") {
                 let metadata = await sharp(stickerBuffer, { animated: true }).metadata().catch(() => sharp(stickerBuffer).metadata());
                 let isAnimated = (metadata.pages || 1) > 1;
-                
+
                 processedBuffer = stickerBuffer;
 
                 if (processedBuffer.length > MAX_SIZE) {
@@ -392,9 +392,9 @@ _Processing sticker packs, this might take a while..._`.trim());
               }
             } catch (processingError: any) {
               console.log(`Processing failed: ${processingError.message}`);
-              
+
               processedBuffer = await getThumbnailAsFallback(stickerData);
-              
+
               if (processedBuffer) {
                 usedFallback = true;
               } else {
@@ -409,15 +409,15 @@ _Processing sticker packs, this might take a while..._`.trim());
                 fallbackCount++;
               }
             } else {
-              console.log(`  ❌ Could not process or fallback`);           
+              console.log(`  ❌ Could not process or fallback`);
               failedCount++;
             }
           } else {
-            console.log(`  ❌ API error: ${stickerRJson.description || 'Unknown'}`);            
+            console.log(`  ❌ API error: ${stickerRJson.description || 'Unknown'}`);
             failedCount++;
           }
         } catch (e: any) {
-          console.error(`  ❌ Error:`, e.message || e);          
+          console.error(`  ❌ Error:`, e.message || e);
           failedCount++;
         }
       }
@@ -432,7 +432,7 @@ _Processing sticker packs, this might take a while..._`.trim());
       }
 
       for (let i = 0; i < stickerPacks.length; i++) {
-        const packTitle = stickerPacks.length > 1 
+        const packTitle = stickerPacks.length > 1
           ? `${json.result.title || packName} (Part ${i + 1}/${stickerPacks.length})`
           : json.result.title || packName;
 
@@ -441,7 +441,7 @@ _Processing sticker packs, this might take a while..._`.trim());
             name: packTitle,
             publisher: "Yuki Botz",
             cover: coverWebp,
-            stickers: stickerPacks[i],
+            stickers: stickerPacks[i] as any,
             packId: String(Date.now() + i),
             description: `Sticker pack from Telegram: ${packName}`
           }
@@ -451,11 +451,11 @@ _Processing sticker packs, this might take a while..._`.trim());
           await new Promise(r => setTimeout(r, 1000));
         }
       }
-      
-      const packInfo = stickerPacks.length > 1 
+
+      const packInfo = stickerPacks.length > 1
         ? `\n*Split into:* ${stickerPacks.length} packs`
         : '';
-      
+
       const fallbackInfo = fallbackCount > 0
         ? `\n*Thumbnail fallback:* ${fallbackCount} sticker`
         : '';
@@ -477,7 +477,7 @@ _Processing sticker packs, this might take a while..._`.trim());
       } else if (e && typeof e === 'object') {
         errorMsg = e.message || e.error || e.toString();
       }
-  
+
       throw `❌ Failed to process sticker pack: ${errorMsg}`;
 
     } finally {

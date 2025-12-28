@@ -76,7 +76,7 @@ Reply with the code to verify.`;
         return await m.reply(`🚩 Your verification code is wrong.`);
       }
       clearTimeout(timeout);
-      
+
       const nameCaption = `╭━━━━━━━━━━━━━━━━━━━━╮
 ┃  📝 STEP 2: NAME
 ╰━━━━━━━━━━━━━━━━━━━━╯
@@ -92,18 +92,18 @@ Please enter your name:
         delete conn!!.register[m.chat]?.[m.sender];
       }, 180000);
       conn!!.register[m.chat][m.sender] = { step: 2, timeout: nameTimeout, messageName };
-      
+
     } else if (step === 2) {
       clearTimeout(conn!!.register[m.chat][m.sender].timeout);
       let name = m.text.trim();
-      
+
       if (name.length < 3) {
         return await conn!!.sendMessage(m.chat, { text: "🚩 Name must be at least 3 characters long." }, { quoted: m });
       }
-      
+
       let user = global.db.data.users[m.sender];
       user.name = name;
-      
+
       const ageCaption = `╭━━━━━━━━━━━━━━━━━━━━╮
 ┃  🎂 STEP 3: AGE
 ╰━━━━━━━━━━━━━━━━━━━━╯
@@ -119,22 +119,22 @@ Please enter your age:
         delete conn!!.register[m.chat]?.[m.sender];
       }, 180000);
       conn!!.register[m.chat][m.sender] = { step: 3, timeout: ageTimeout, messageAge };
-      
+
     } else if (step === 3) {
       clearTimeout(conn!!.register[m.chat][m.sender].timeout);
       let age = parseInt(m.text);
-      
+
       if (isNaN(age)) {
         return await conn!!.sendMessage(m.chat, { text: "🚩 Invalid age, please enter a valid number." }, { quoted: m });
       }
-      
+
       if (age < 13) {
         return await conn!!.sendMessage(m.chat, { text: "🚩 You must be at least 13 years old to register." }, { quoted: m });
       }
-      
+
       let user = global.db.data.users[m.sender];
       user.age = age;
-      
+
       const passwordCaption = `╭━━━━━━━━━━━━━━━━━━━━╮
 ┃  🔑 STEP 4: PASSWORD (OPTIONAL)
 ╰━━━━━━━━━━━━━━━━━━━━╯
@@ -169,24 +169,24 @@ Please enter your age:
         delete conn!!.register[m.chat]?.[m.sender];
       }, 180000);
       conn!!.register[m.chat][m.sender] = { step: 4, timeout: passwordTimeout, messagePassword };
-      
+
     } else if (step === 4) {
       clearTimeout(conn!!.register[m.chat][m.sender].timeout);
       let user = global.db.data.users[m.sender];
-      let senderLid = await conn.getJid(m.sender);
+      let senderLid = await conn!!.getJid(m.sender);
       let ppUrl = await conn!!.profilePictureUrl(m.sender, 'image').catch((_) => "https://telegra.ph/file/1dff1788814dd281170f8.jpg");
-      
+
       let passwordInput = m.text.trim();
       let hasPassword = false;
       let bonusRewards = "";
-      
+
       if (passwordInput.toLowerCase() === 'skip') {
         user.limit += 50;
         bonusRewards = "\n\n💭 *You skipped password setup*\nYou can set it later using profile command!";
       } else {
         if (passwordInput.length < 6 || passwordInput.length > 20) {
-          return await conn!!.sendMessage(m.chat, { 
-            text: "🚩 Password must be 6-20 characters long.\nTry again or reply *'skip'* to continue without password." 
+          return await conn!!.sendMessage(m.chat, {
+            text: "🚩 Password must be 6-20 characters long.\nTry again or reply *'skip'* to continue without password."
           }, { quoted: m });
         }
 
@@ -195,7 +195,7 @@ Please enter your age:
         user.money = (user.money || 0) + 10000;
         user.exp = (user.exp || 0) + 50;
         hasPassword = true;
-        
+
         bonusRewards = `\n\n🎊 *BONUS REWARDS CLAIMED!*
 ━━━━━━━━━━━━━━━━━━━━
 💎 Limit: +100
@@ -203,7 +203,7 @@ Please enter your age:
 ⭐ EXP: +50
 🎮 RPG Access: Unlocked`;
       }
-      
+
       user.regTime = +new Date();
       user.registered = true;
 
@@ -235,7 +235,7 @@ Type *menu* to get started!`;
           }
         }
       }, { quoted: m });
-      
+
       delete conn!!.register[m.chat]?.[m.sender];
     }
   }
