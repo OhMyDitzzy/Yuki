@@ -83,11 +83,8 @@ export async function handler(chatUpdate: BaileysEventMap["messages.upsert"]) {
     let user: any
     let bot: any
 
-    for (const p of participants) {
-      const lid = await this.getLid(p.id)
-      if (lid === senderLid) user = p
-      if (lid === this.user.lid) bot = p
-    }
+   user = participants.find(u => conn.decodeJid(u.id) === m.sender) || participants.find(u => u.id === senderLid)
+   bot = participants.find(u => conn.decodeJid(u.id) === conn.user.jid) || participants.find(u => u.id === conn.user.lid)   
 
     const isRAdmin = user?.admin === 'superadmin'
     const isAdmin = isRAdmin || user?.admin === 'admin'
