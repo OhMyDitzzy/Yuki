@@ -45,8 +45,7 @@ let handler: PluginHandler = {
             ]
           }
         ]
-      },
-      m
+      }, { quoted: m } as any
     );
   }
 };

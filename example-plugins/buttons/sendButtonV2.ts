@@ -36,8 +36,7 @@ let handler: PluginHandler = {
           text: "Set Reminder",
           id: "reminder_1"
         }
-      ],
-      m
+      ], { quoted: m } as any
     );
   }
 };

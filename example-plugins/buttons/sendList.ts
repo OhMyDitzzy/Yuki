@@ -4,6 +4,7 @@ let handler: PluginHandler = {
   cmd: ["list"],
   exec: async (m, { conn }) => {
     // List menu with sections
+    // This only works in private chat
     await conn!!.sendList(
       m.chat,
       "Select an option from the menu below", // Main text
