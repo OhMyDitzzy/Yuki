@@ -16,6 +16,7 @@ let handler: PluginHandler = {
   tags: ["media"],
   limit: true,
   register: true,
+  disabled: true,
   cmd: /^(stic?kertele(gram)?)$/i,
   exec: async (m, { args, usedPrefix, command, conn }) => {
     if (!args?.[0]) throw `• *Example :* ${usedPrefix + command!!} https://t.me/addstickers/namepack`;

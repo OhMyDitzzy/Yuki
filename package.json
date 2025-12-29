@@ -14,7 +14,7 @@
   "dependencies": {
     "awesome-phonenumber": "^3.4.0",
     "axios": "^1.13.2",
-    "baileys": "github:jlucaso1/Baileys#feat-add-stickerpack-support",
+    "baileys": "^7.0.0-rc.9",
     "canvafy": "^7.2.1",
     "cfonts": "^3.3.1",
     "chalk": "^5.6.2",
