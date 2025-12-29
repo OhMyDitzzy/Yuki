@@ -1038,13 +1038,14 @@ END:VCARD`.trim();
         quoted: MiscMessageGenerationOptions,
         options: any,
       ) {
+        let cleanText = typeof text === "string" ? text.replace(/@lid/g, "") : text;
         return Buffer.isBuffer(text)
           ? conn.sendFile(jid, text, "file", "", quoted, false, options)
           : conn.sendMessage(
             jid,
             {
               ...options,
-              text,
+              text: cleanText,
               contextInfo: {
                 mentionedJid: conn.parseMention(text),
                 ...(global.adReply?.contextInfo || {}),
@@ -1652,7 +1653,7 @@ END:VCARD`.trim();
 
     parseMention: {
       value(text = "") {
-        const regex = /@([0-9]{5,16}|0)/g;
+        /*const regex = /@([0-9]{5,16}|0)/g;
         const mentions: any = [];
         let match: any;
 
@@ -1660,7 +1661,32 @@ END:VCARD`.trim();
           mentions.push(match[1] + "@s.whatsapp.net");
         }
 
-        return mentions;
+        return mentions;*/
+        if (!text) return [];
+        
+        const mentions: string[] = [];
+        // Pattern for LID: @224786408058912@lid or 224786408058912@lid
+        // LIDs can vary in length (usually 12-20 digits)
+        const regexLid = /@?([0-9]{10,25}@lid)/g;
+        const regexJid = /@([0-9]{5,16})(?!@lid)/g;
+        
+        let match: any;
+        
+        while ((match = regexLid.exec(text)) !== null) {
+          mentions.push(match[1]);
+        }
+        
+        const lidNumbers = mentions.map(lid => lid.replace(/@lid$/, ''));
+        
+        while ((match = regexJid.exec(text)) !== null) {
+          const numberId = match[1];
+
+          if (lidNumbers.includes(numberId)) continue;
+             
+          mentions.push(numberId + "@s.whatsapp.net");
+        }   
+             
+        return mentions
       },
       enumerable: true,
     },

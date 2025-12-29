@@ -53,10 +53,12 @@ Reply with the code to verify.`;
         otp: captcha.value,
         user,
         key,
-        timeout: setTimeout(() => {
-          sock.sendMessage(m.chat, { delete: key });
+        attempts: 0, // Track attempts
+        timeout: setTimeout(async () => {
+          await sock.sendMessage(m.chat, { delete: key });
           delete sock.register[m.chat][m.sender];
-        }, 60 * 1000)
+          await sock.sendMessage(m.chat, { text: "⏰ Registration timeout. Please use `/register` to start again." }, { quoted: m });
+        }, 300000) // 5 minutes = 300000ms
       }
     };
   },
@@ -66,16 +68,30 @@ Reply with the code to verify.`;
     if (!conn!!.register[m.chat]?.[m.sender]) return;
     if (!m.text) return;
 
-    let { timeout, otp, step, message, key } = conn!!.register[m.chat]?.[m.sender];
+    let registerData = conn!!.register[m.chat]?.[m.sender];
+    let { timeout, otp, step, attempts, key } = registerData;
 
     if (step === 1) {
       if (m.text !== otp) {
-        clearTimeout(timeout);
-        await conn!!.sendMessage(m.chat, { delete: key });
-        delete conn!!.register[m.chat]?.[m.sender];
-        return await m.reply(`🚩 Your verification code is wrong.`);
+        attempts = (attempts || 0) + 1;
+        
+        if (attempts >= 3) {
+          clearTimeout(timeout);
+          await conn!!.sendMessage(m.chat, { delete: key });
+          delete conn!!.register[m.chat]?.[m.sender];
+          return await conn!!.sendMessage(m.chat, { 
+            text: `🚩 Maximum attempts reached (3/3).\nYour verification code was wrong.\n\nPlease use \`/register\` to start again.` 
+          }, { quoted: m });
+        }
+
+        conn!!.register[m.chat][m.sender].attempts = attempts;
+        return await conn!!.sendMessage(m.chat, { 
+          text: `🚩 Wrong captcha code. (${attempts}/3 attempts)\nPlease try again.` 
+        }, { quoted: m });
       }
+
       clearTimeout(timeout);
+      await conn!!.sendMessage(m.chat, { delete: key });
 
       const nameCaption = `╭━━━━━━━━━━━━━━━━━━━━╮
 ┃  📝 STEP 2: NAME
@@ -90,19 +106,26 @@ Please enter your name:
       let nameTimeout = setTimeout(async () => {
         await conn!!.sendMessage(m.chat, { delete: messageName!!.key });
         delete conn!!.register[m.chat]?.[m.sender];
+        await conn!!.sendMessage(m.chat, { text: "⏰ Registration timeout. Please use `/register` to start again." }, { quoted: m });
       }, 180000);
-      conn!!.register[m.chat][m.sender] = { step: 2, timeout: nameTimeout, messageName };
+      conn!!.register[m.chat][m.sender] = { step: 2, timeout: nameTimeout, key: messageName!!.key };
 
     } else if (step === 2) {
-      clearTimeout(conn!!.register[m.chat][m.sender].timeout);
+      clearTimeout(timeout);
       let name = m.text.trim();
 
       if (name.length < 3) {
-        return await conn!!.sendMessage(m.chat, { text: "🚩 Name must be at least 3 characters long." }, { quoted: m });
+        await conn!!.sendMessage(m.chat, { delete: key });
+        delete conn!!.register[m.chat]?.[m.sender];
+        return await conn!!.sendMessage(m.chat, { 
+          text: "🚩 Name must be at least 3 characters long.\n\nPlease use `/register` to start again." 
+        }, { quoted: m });
       }
 
       let user = global.db.data.users[m.sender];
       user.name = name;
+
+      await conn!!.sendMessage(m.chat, { delete: key });
 
       const ageCaption = `╭━━━━━━━━━━━━━━━━━━━━╮
 ┃  🎂 STEP 3: AGE
@@ -117,23 +140,34 @@ Please enter your age:
       let ageTimeout = setTimeout(async () => {
         await conn!!.sendMessage(m.chat, { delete: messageAge!!.key });
         delete conn!!.register[m.chat]?.[m.sender];
+        await conn!!.sendMessage(m.chat, { text: "⏰ Registration timeout. Please use `/register` to start again." }, { quoted: m });
       }, 180000);
-      conn!!.register[m.chat][m.sender] = { step: 3, timeout: ageTimeout, messageAge };
+      conn!!.register[m.chat][m.sender] = { step: 3, timeout: ageTimeout, key: messageAge!!.key };
 
     } else if (step === 3) {
-      clearTimeout(conn!!.register[m.chat][m.sender].timeout);
+      clearTimeout(timeout);
       let age = parseInt(m.text);
 
       if (isNaN(age)) {
-        return await conn!!.sendMessage(m.chat, { text: "🚩 Invalid age, please enter a valid number." }, { quoted: m });
+        await conn!!.sendMessage(m.chat, { delete: key });
+        delete conn!!.register[m.chat]?.[m.sender];
+        return await conn!!.sendMessage(m.chat, { 
+          text: "🚩 Invalid age, please enter a valid number.\n\nPlease use `/register` to start again." 
+        }, { quoted: m });
       }
 
       if (age < 13) {
-        return await conn!!.sendMessage(m.chat, { text: "🚩 You must be at least 13 years old to register." }, { quoted: m });
+        await conn!!.sendMessage(m.chat, { delete: key });
+        delete conn!!.register[m.chat]?.[m.sender];
+        return await conn!!.sendMessage(m.chat, { 
+          text: "🚩 You must be at least 13 years old to register.\n\nPlease use `/register` to start again." 
+        }, { quoted: m });
       }
 
       let user = global.db.data.users[m.sender];
       user.age = age;
+
+      await conn!!.sendMessage(m.chat, { delete: key });
 
       const passwordCaption = `╭━━━━━━━━━━━━━━━━━━━━╮
 ┃  🔑 STEP 4: PASSWORD (OPTIONAL)
@@ -167,11 +201,14 @@ Please enter your age:
       let passwordTimeout = setTimeout(async () => {
         await conn!!.sendMessage(m.chat, { delete: messagePassword!!.key });
         delete conn!!.register[m.chat]?.[m.sender];
+        await conn!!.sendMessage(m.chat, { text: "⏰ Registration timeout. Please use `/register` to start again." }, { quoted: m });
       }, 180000);
-      conn!!.register[m.chat][m.sender] = { step: 4, timeout: passwordTimeout, messagePassword };
+      conn!!.register[m.chat][m.sender] = { step: 4, timeout: passwordTimeout, key: messagePassword!!.key };
 
     } else if (step === 4) {
-      clearTimeout(conn!!.register[m.chat][m.sender].timeout);
+      clearTimeout(timeout);
+      await conn!!.sendMessage(m.chat, { delete: key });
+      
       let user = global.db.data.users[m.sender];
       let senderLid = await conn!!.getJid(m.sender);
       let ppUrl = await conn!!.profilePictureUrl(m.sender, 'image').catch((_) => "https://telegra.ph/file/1dff1788814dd281170f8.jpg");
@@ -185,8 +222,9 @@ Please enter your age:
         bonusRewards = "\n\n💭 *You skipped password setup*\nYou can set it later using profile command!";
       } else {
         if (passwordInput.length < 6 || passwordInput.length > 20) {
+          delete conn!!.register[m.chat]?.[m.sender];
           return await conn!!.sendMessage(m.chat, {
-            text: "🚩 Password must be 6-20 characters long.\nTry again or reply *'skip'* to continue without password."
+            text: "🚩 Password must be 6-20 characters long.\n\nPlease use `/register` to start again."
           }, { quoted: m });
         }
 
