@@ -13,33 +13,48 @@ let handler: PluginHandler = {
   cmd: ["swvideo", "compressvideo", "cv"],
   exec: async (m, { conn, usedPrefix, command, text, args }) => {
     if (!m.quoted) {
-      throw `• *Reply to a video by sending the command:* ${usedPrefix + command}\n• *Example:* ${usedPrefix + command} my awesome caption`;
+      throw `• *Reply to a video by sending the command:* ${usedPrefix + command!!}\n• *Example:* ${usedPrefix + command!!} my awesome caption`;
     }
 
     m.react("⏳");
 
     let mime = m.quoted.mimetype || "";
-    
+
     if (!/video/.test(mime)) {
-      throw `Reply to a video with caption *${usedPrefix + command}*`;
+      throw `Reply to a video with caption *${usedPrefix + command!!}*`;
     }
 
     const tempId = Date.now();
     const inputPath = join(tmpdir(), `input_${tempId}.mp4`);
     const outputPath = join(tmpdir(), `output_${tempId}.mp4`);
 
+    conn!!.compressvideo = conn!!.compressvideo || {};
+
+    if (conn!!.compressvideo[m.sender]) {
+      return m.reply("*You've just compressed your video! Wait for the process to complete.*");
+    }
+
+    if (Object.keys(conn!!.compressvideo[m.sender]).length > 0) {
+      return m.reply("*This command is currently in use by another user! Please wait for the process to complete.*")
+    }
+
+    conn!!.compressvideo[m.sender] = {
+      startTime: Date.now(),
+      chatId: m.chat
+    }
+
     try {
       m.reply("📥 Downloading video...");
       let media = await m.quoted.download();
-      
+
       if (!media || media.length === 0) {
         throw new Error("Failed to download video");
       }
 
       const originalSize = (media.length / 1024 / 1024).toFixed(2);
-      
+
       await writeFile(inputPath, media);
-      
+
       m.reply("🔍 Checking video duration...");
       const probeProc = Bun.spawn([
         "ffprobe",
@@ -50,24 +65,24 @@ let handler: PluginHandler = {
       ], {
         stdout: "pipe"
       });
-      
+
       await probeProc.exited;
       const durationOutput = await new Response(probeProc.stdout).text();
       const duration = parseFloat(durationOutput.trim());
-      
+
       if (isNaN(duration)) {
         throw new Error("Failed to get video duration");
       }
-      
+
       if (duration > 90) {
-        await unlink(inputPath).catch(() => {});
+        await unlink(inputPath).catch(() => { });
         const minutes = Math.floor(duration / 60);
         const seconds = Math.floor(duration % 60);
         throw `❌ Video is too long!\n\n📹 Video length: ${minutes}m ${seconds}s\n⏱️ Maximum: 1m 30s\n\nPlease use a shorter video.`;
-      }     
-       
-      m.reply(`🎬 Compressing... (${originalSize} MB)`);  
-              
+      }
+
+      m.reply(`🎬 Compressing... (${originalSize} MB)`);
+
       const proc = Bun.spawn([
         "ffmpeg",
         "-i", inputPath,
@@ -82,7 +97,7 @@ let handler: PluginHandler = {
       await proc.exited;
 
       const out = await readFile(outputPath);
-      
+
       if (out.length === 0) throw new Error("Empty output");
 
       m.react("✅");
@@ -91,20 +106,22 @@ let handler: PluginHandler = {
 
       await conn!!.sendFile(m.chat, out, `compressed_${tempId}.mp4`, caption, m);
 
-      await unlink(inputPath).catch(() => {});
-      await unlink(outputPath).catch(() => {});
+      await unlink(inputPath).catch(() => { });
+      await unlink(outputPath).catch(() => { });
 
     } catch (e: any) {
       m.react("❌");
-      
-      await unlink(inputPath).catch(() => {});
-      await unlink(outputPath).catch(() => {});
-      
+
+      await unlink(inputPath).catch(() => { });
+      await unlink(outputPath).catch(() => { });
+
       if (typeof e === "string" && e.includes("too long")) {
         throw e;
       }
-      
+
       throw `Failed to compress video. Please try again.`;
+    } finally {
+      delete conn!!.compressvideo[m.sender]
     }
   }
 }
