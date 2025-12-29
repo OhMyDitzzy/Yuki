@@ -1,3 +1,7 @@
+// TODO: Sticker pack messages are not stable yet.
+// This currently relies on a Baileys fork.
+// Fallback to regular sticker messages until upstream supports this.
+// [#6](https://github.com/OhMyDitzzy/Yuki/issues/6)
 import type { PluginHandler } from "@yuki/types";
 import { fileTypeFromBuffer } from "file-type";
 import { imageToWebp } from "libs/exif";
