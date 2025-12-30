@@ -1,5 +1,5 @@
 import "./config"
-import { Browsers, DisconnectReason, makeCacheableSignalKeyStore, type UserFacingSocketConfig, type WAMessageKey } from 'baileys';
+import { Browsers, DisconnectReason, jidNormalizedUser, makeCacheableSignalKeyStore, type UserFacingSocketConfig } from 'baileys';
 import { Low, JSONFile } from 'lowdb';
 import path from 'path';
 import pino from 'pino';
@@ -83,6 +83,13 @@ const connOptions: UserFacingSocketConfig = {
       level: 'silent',
       stream: 'store'
     })),
+  },
+  // @ts-ignore
+  getMessage: async (key) => {
+    const jid = jidNormalizedUser(key.remoteJid!);
+    const msg = await store.loadMessage(jid, key.id!);
+
+    return msg?.message || '';
   },
   generateHighQualityLinkPreview: true,
 }
