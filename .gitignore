@@ -8,6 +8,7 @@ dist
 
 # Session
 Yuki
+bun.lock
 
 # code coverage
 coverage

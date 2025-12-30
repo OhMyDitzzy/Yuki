@@ -1,6 +1,6 @@
 <div align="center">
     
-<img src="https://files.catbox.moe/7n4axc.png" alt="Yuki Banner" />
+<img src="https://ditzzy-cdn.hf.space/files/83e6bc5fd1139933.png" alt="Yuki Banner" />
     
 <h1 align="center">Yuki Souo</h1>
 

@@ -1,5 +1,5 @@
 import "./config"
-import { Browsers, DisconnectReason, makeCacheableSignalKeyStore, type UserFacingSocketConfig } from 'baileys';
+import { Browsers, DisconnectReason, makeCacheableSignalKeyStore, type UserFacingSocketConfig, type WAMessageKey } from 'baileys';
 import { Low, JSONFile } from 'lowdb';
 import path from 'path';
 import pino from 'pino';
@@ -16,7 +16,6 @@ import { commandCache } from "./libs/commandCache";
 import { yukiKeepMatcher, yukiKeepParser } from "libs/yukiKeepParser";
 import { CleanupManager } from "libs/cleanupManager";
 import { MemoryMonitor } from "libs/MemoryMonitor";
-import { bind } from "libs/store";
 import { closeSQLiteAuthState, useSQLiteAuthState } from "libs/useSQLAuthState";
 
 function filename(metaUrl = import.meta.url) {
@@ -90,7 +89,6 @@ const connOptions: UserFacingSocketConfig = {
 
 global.conn = makeWASocket(connOptions);
 conn.isInit = false;
-global.store = bind(global.conn as any)
 
 const cleanupManager = new CleanupManager();
 const memoryMonitor = new MemoryMonitor(conn.logger, cleanupManager, {
@@ -312,7 +310,6 @@ global.reloadHandler = async function(restatConn: boolean) {
     };
 
     global.conn = makeWASocket(newConnOptions, { chats: oldChats });
-    global.store = bind(global.conn as any);
     isInit = true;
   }
 
@@ -373,7 +370,7 @@ let pluginFilter = (filename: string) => /\.ts$/.test(filename);
 
 global.reload = async (filename: string = "") => {
   if (!pluginFilter(filename)) return;
-  
+
   if (filename.includes('_utils')) return;
 
   const relPath = path.relative(pluginFolder, filename);

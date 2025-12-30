@@ -1,6 +1,6 @@
 import type { ExtendedWASocket } from "../types/extendWASocket";
-import type { Store } from "libs/store";
 import { commandCache } from "../libs/commandCache";
+import type { InMemoryStore } from "libs/makeInMemoryStore";
 
 
 export { };
@@ -10,7 +10,7 @@ declare global {
   var prefix: any;
   var commandCache: CommandCache;
   var db: Low<any>;
-  var store: Store;
+  var store: InMemoryStore;
   var startupTime: number;
   var isProcessingPending: boolean;
   var pendingMessagesCount: number;
@@ -27,22 +27,22 @@ declare global {
     capitalizeV2: (text?: string) => any;
     isNumber: (text?: string) => any;
   }
-  
+
   interface Number {
     getRandom: any;
     toTimeString: (time?: number) => any;
     isNumber: (theNumber?: number) => any;
   }
-  
+
   interface Array {
     getRandom: () => any;
   }
-  
+
   interface ArrayBuffer {
     toBuffer: (bufferData: any) => any;
     getFileType: (bufferData: any) => any;
   }
-  
+
   interface Uint8Array {
     getFileType: (bufferData: any) => any;
   }

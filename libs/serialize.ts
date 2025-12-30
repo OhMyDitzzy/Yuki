@@ -30,6 +30,10 @@ import { toAudio } from "./converter";
 import { Jimp, JimpMime } from "jimp";
 import type { ExtendedWASocket } from "../types/extendWASocket";
 import type { ExtendedWAMessage } from "../types/extendWAMessage";
+import { makeInMemoryStore } from "./makeInMemoryStore.ts";
+import pino from "pino";
+
+global.store = await makeInMemoryStore({ logger: pino().child({ level: 'silent', stream: 'store' }) })
 
 // A code for button support from shannz, thanks to him
 // repo: https://github.com/Shannzx10/KurumiSaki/
@@ -206,13 +210,13 @@ export function makeWASocket(
   config: UserFacingSocketConfig,
   options: any = {},
 ): ExtendedWASocket {
-  let conn: any = _makeWASockets(config);  
-  
+  let conn: any = _makeWASockets(config);
+
   const originalUserDescriptor = Object.getOwnPropertyDescriptor(conn, 'user');
   const userState = {
     cleanLid: null as string | null
   };
-  
+
   const sock = Object.defineProperties(conn, {
     chats: {
       value: { ...(options.chats || {}) },
@@ -221,7 +225,7 @@ export function makeWASocket(
     user: {
       get() {
         let originalUser;
-      
+
         if (originalUserDescriptor?.get) {
           originalUser = originalUserDescriptor.get.call(conn);
         } else if (originalUserDescriptor?.value) {
@@ -229,7 +233,7 @@ export function makeWASocket(
         } else {
           originalUser = conn._user || conn.__user;
         }
-      
+
         if (!originalUser) return originalUser;
 
         return {
@@ -257,7 +261,7 @@ export function makeWASocket(
         } else {
           originalUser = conn._user;
         }
-      
+
         if (originalUser?.lid) {
           try {
             userState.cleanLid = await conn.getLid(originalUser.lid);
@@ -1663,29 +1667,29 @@ END:VCARD`.trim();
 
         return mentions;*/
         if (!text) return [];
-        
+
         const mentions: string[] = [];
         // Pattern for LID: @224786408058912@lid or 224786408058912@lid
         // LIDs can vary in length (usually 12-20 digits)
         const regexLid = /@?([0-9]{10,25}@lid)/g;
         const regexJid = /@([0-9]{5,16})(?!@lid)/g;
-        
+
         let match: any;
-        
+
         while ((match = regexLid.exec(text)) !== null) {
           mentions.push(match[1]);
         }
-        
+
         const lidNumbers = mentions.map(lid => lid.replace(/@lid$/, ''));
-        
+
         while ((match = regexJid.exec(text)) !== null) {
           const numberId = match[1];
 
           if (lidNumbers.includes(numberId)) continue;
-             
+
           mentions.push(numberId + "@s.whatsapp.net");
-        }   
-             
+        }
+
         return mentions
       },
       enumerable: true,
@@ -2039,9 +2043,12 @@ END:VCARD`.trim();
       }
       : {}),
   });
+
+  store.bind(conn.ev)
+
   if (sock.user?.id) sock.user.jid = sock.decodeJid(sock.user.id);
   if (conn.user?.lid) {
-     conn._updateCleanLid();
+    conn._updateCleanLid();
   }
   return sock as ExtendedWASocket;
 }
