@@ -7,7 +7,6 @@ const handler: PluginHandler = {
   description: "Command to check whether the bot is responding or not",
   tags: ["public"],
   cmd: ["ping", "p"],
-
   exec: async (m, { conn }) => {
     const start = performance.now();
 

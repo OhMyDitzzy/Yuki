@@ -20,7 +20,7 @@ let handler: PluginHandler = {
   rowner: true,
   usePrefix: false,
   exec: async (m, { conn, command, usedPrefix, text }) => {
-    if (!text) throw `*• Example:* ${usedPrefix + command!!} *[filename]*`;
+    if (!text) throw `*• Example:* ${command!!} *[filename]*`;
     
     if (command === "sf") {
       if (!m.quoted) throw `*Reply your code*`;

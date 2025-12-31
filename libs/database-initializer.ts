@@ -22,6 +22,7 @@ export function initializeUser(user: any, sender: string, m: any): void {
       if (!isNumber(user.limit)) user.limit = 50;
     }
     if (!isNumber(user.afk)) user.afk = -1;
+    if (!isNumber(user.snlast)) user.snlast = 0
     if (!('afkReason' in user)) user.afkReason = '';
     if (!('password' in user)) user.password = '';
     if (!('banned' in user)) user.banned = false;
@@ -43,6 +44,7 @@ export function initializeUser(user: any, sender: string, m: any): void {
     age: -1,
     regTime: -1,
     afk: -1,
+    snlast: 0,
     banned: false,
     bannedReason: '',
     password: '',
