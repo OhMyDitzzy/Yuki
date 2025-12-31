@@ -127,3 +127,18 @@ export interface InteractiveMessageContent {
   document?: Buffer | string | { url: string };
   [key: string]: any;
 }
+
+export interface CarouselCard {
+  header?: string;
+  body?: string;
+  footer?: string;
+  image?: Buffer | string;
+  buttons?: ButtonV2Params[];
+}
+
+export interface BtnOptsCarouselParams {
+  contextInfo?: Partial<proto.IContextInfo>;
+  body?: Partial<proto.Message.InteractiveMessage.Body>;
+  header?: Partial<proto.Message.InteractiveMessage.Header>;
+  footer?: Partial<proto.Message.InteractiveMessage.Footer>;
+}

@@ -6,7 +6,7 @@ import type {
   MessageGenerationOptionsFromContent
 } from "baileys";
 import type { ILogger } from "baileys/lib/Utils/logger";
-import type { BtnOptsV2ListParams, BtnOptsV2Params, ButtonParams, ButtonV2Params, InteractiveMessageContent, ListSection, SendButtonOptions, SendListOptions, ListV2 } from "./buttons/interactive_message_button";
+import type { BtnOptsV2ListParams, BtnOptsV2Params, ButtonParams, ButtonV2Params, InteractiveMessageContent, ListSection, SendButtonOptions, SendListOptions, ListV2, CarouselCard, BtnOptsCarouselParams } from "./buttons/interactive_message_button";
 import type { ExtendedWAMessage } from "./extendWAMessage";
 
 export interface Logger extends ILogger {
@@ -63,6 +63,13 @@ export interface ExtendedWASocket extends WASocket {
     buttons: ButtonV2Params[],
     quoted: MessageGenerationOptionsFromContent
   ): Promise<ExtendedWAMessage>;
+  
+  sendCarousel(
+    jid: string,
+    bodyOpts: BtnOptsCarouselParams,
+    cards: CarouselCard[],
+    quoted: MessageGenerationOptionsFromContent
+  ): Promise<void>;
 
   sendInteractiveMessage(
     jid: string,

@@ -907,6 +907,141 @@ END:VCARD`.trim();
         });
       }
     },
+    sendCarousel: {
+      async value(
+        jid: string,
+        bodyOpts: any,
+        cards: any[],
+        quoted: any,
+      ) {
+        try {
+          let preparedCards = await Promise.all(cards.map(async (card) => {
+            let imageMedia;
+            if (card.image) {
+              if (Buffer.isBuffer(card.image)) {
+                imageMedia = await prepareWAMessageMedia(
+                  { image: card.image },
+                  { upload: conn!!.waUploadToServer }
+                );
+              } else if (typeof card.image === 'string') {
+                imageMedia = await prepareWAMessageMedia(
+                  { image: { url: card.image } },
+                  { upload: conn!!.waUploadToServer }
+                );
+              }
+            }
+
+            let cardButtons = card.buttons ? card.buttons.map((button: any) => {
+              if (button.type === "url") {
+                return {
+                  name: "cta_url",
+                  buttonParamsJson: JSON.stringify({
+                    display_text: button.text,
+                    url: button.url,
+                    merchant_url: button.url
+                  })
+                };
+              } else if (button.type === 'copy') {
+                return {
+                  name: "cta_copy",
+                  buttonParamsJson: JSON.stringify({
+                    display_text: button.text,
+                    id: button.id,
+                    copy_code: button.copy_code
+                  })
+                };
+              } else if (button.type === 'buttons') {
+                return {
+                  name: "quick_reply",
+                  buttonParamsJson: JSON.stringify({
+                    display_text: button.text,
+                    id: button.id
+                  })
+                };
+              } else if (button.type === "reminder") {
+                return {
+                  name: "cta_reminder",
+                  buttonParamsJson: JSON.stringify({
+                    display_text: button.text,
+                    id: button.id
+                  })
+                };
+              } else if (button.type === "webview") {
+                return {
+                  name: "open_webview",
+                  buttonParamsJson: JSON.stringify({
+                    link: {
+                      in_app_webview: true,
+                      display_text: button.text,
+                      url: button.url,
+                      success_url: button.url + "/success",
+                      cancel_url: button.url + "/cancel"
+                    }
+                  })
+                };
+              }
+            }) : [];
+
+            return {
+              ...(card.header && imageMedia && {
+                header: proto.Message.InteractiveMessage.Header.create({
+                  title: card.header,
+                  hasMediaAttachment: true,
+                  ...imageMedia
+                })
+              }),
+              ...(card.body && {
+                body: proto.Message.InteractiveMessage.Body.create({
+                  text: card.body
+                })
+              }),
+              ...(card.footer && {
+                footer: proto.Message.InteractiveMessage.Footer.create({
+                  text: card.footer
+                })
+              }),
+              nativeFlowMessage: proto.Message.InteractiveMessage.NativeFlowMessage.create({
+                buttons: cardButtons as any
+              })
+            };
+          }));
+
+          let msg = generateWAMessageFromContent(jid, {
+            viewOnceMessage: {
+              message: {
+                messageContextInfo: {
+                  deviceListMetadata: {},
+                  deviceListMetadataVersion: 2
+                },
+                interactiveMessage: proto.Message.InteractiveMessage.create({
+                  ...(bodyOpts.contextInfo && {
+                    contextInfo: bodyOpts.contextInfo
+                  }),
+                  ...(bodyOpts.header && {
+                    header: proto.Message.InteractiveMessage.Header.create(bodyOpts.header)
+                  }),
+                  ...(bodyOpts.body && {
+                    body: proto.Message.InteractiveMessage.Body.create(bodyOpts.body)
+                  }),
+                  ...(bodyOpts.footer && {
+                    footer: proto.Message.InteractiveMessage.Footer.create(bodyOpts.footer)
+                  }),
+                  carouselMessage: proto.Message.InteractiveMessage.CarouselMessage.create({
+                    cards: preparedCards
+                  })
+                })
+              }
+            }
+          }, quoted);
+
+          await conn!!.relayMessage(jid, msg.message, {
+            messageId: msg.key.id
+          });
+        } catch (e: any) {
+          console.error('Error sending carousel:', e);
+        }
+      }
+    },
     sendListV2: {
       async value(
         jid: string,
