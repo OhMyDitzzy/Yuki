@@ -450,7 +450,9 @@ export const makeInMemoryStore = async (config: StoreConfig): Promise<InMemorySt
         const list = messages[item.jid];
         list?.clear();
       } else {
-        const jid = item.keys[0]?.remoteJid!;
+        // Weird error, Response is a WAMessageKey not WAMessageKey[]
+        // @ts-ignore
+        const jid = item.keys?.remoteJid!;
         const list = messages[jid];
         if (list) {
           const idSet = new Set(item.keys.map(k => k.id));
