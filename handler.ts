@@ -233,7 +233,7 @@ export async function handler(chatUpdate: BaileysEventMap["messages.upsert"]) {
 
       if (!isAccept) continue;
       
-      if (plugin.disabled) {
+      if (plugin.disabled && !global.db.data.users[m.sender].moderator) {
         await m.reply("Sorry, This command is currently disabled by the owner :(");
         return;
       }
