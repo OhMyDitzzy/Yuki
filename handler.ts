@@ -126,11 +126,7 @@ export async function handler(chatUpdate: BaileysEventMap["messages.upsert"]) {
 
     for (let name in global.plugins) {
       let plugin = global.plugins[name];
-      if (!plugin) continue;
-      if (plugin.disabled) {
-        await m.reply("Sorry, This command is currently disabled by the owner :(");
-        continue;
-      }
+      if (!plugin) continue;      
       if (typeof plugin.all === "function") {
         try {
           await plugin.all.call(this, m, chatUpdate);
@@ -236,6 +232,12 @@ export async function handler(chatUpdate: BaileysEventMap["messages.upsert"]) {
             false;
 
       if (!isAccept) continue;
+      
+      if (plugin.disabled) {
+        await m.reply("Sorry, This command is currently disabled by the owner :(");
+        return;
+      }
+      
       m.plugin = name
       if (m.chat in global.db.data.chats || m.sender in global.db.data.users) {
         let chat = global.db.data.chats[m.chat]
