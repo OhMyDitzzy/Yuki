@@ -11,12 +11,16 @@ global.owner = [
 ] // Put your number here for owner
 global.mods = ['62851xxxx'] // Moderator
 
+// Will be filled in later
 global.APIs = {
-  /* your_apikey: "https://api.website" */
+  /* yourname: "https://api.website" */
+  PaxSenix: "https://api.paxsenix.org"
 }
 
 global.APIKeys = {
   // 'https://website': 'apikey'
+  
+  'https://api.paxsenix.org': 'your_api_key' // Get Apikey: https://api.paxsenix.org
 }
 
 global.thumb = "https://files.catbox.moe/7n4axc.png"
