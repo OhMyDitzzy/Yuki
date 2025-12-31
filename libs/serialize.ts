@@ -842,51 +842,35 @@ END:VCARD`.trim();
           });
 
           let msg = generateWAMessageFromContent(jid, {
-            messageContextInfo: {
-              deviceListMetadata: {},
-              deviceListMetadataVersion: 2
-            },
-            interactiveMessage: proto.Message.InteractiveMessage.create({
-              ...(btnOpts.contextInfo && {
-                contextInfo: btnOpts.contextInfo
-              }),
-              ...(btnOpts.header && {
-                header: proto.Message.InteractiveMessage.Header.create(btnOpts.header)
-              }),
-              ...(btnOpts.body && {
-                body: proto.Message.InteractiveMessage.Body.create(btnOpts.body)
-              }),
-              ...(btnOpts.footer && {
-                footer: proto.Message.InteractiveMessage.Footer.create(btnOpts.footer)
-              }),
-              nativeFlowMessage: proto.Message.InteractiveMessage.NativeFlowMessage.create({
-                buttons: interactiveBtn as any
-              })
-            })
+            viewOnceMessage: {
+              message: {
+                messageContextInfo: {
+                  deviceListMetadata: {},
+                  deviceListMetadataVersion: 2
+                },
+                interactiveMessage: proto.Message.InteractiveMessage.create({
+                  ...(btnOpts.contextInfo && {
+                    contextInfo: btnOpts.contextInfo
+                  }),
+                  ...(btnOpts.header && {
+                    header: proto.Message.InteractiveMessage.Header.create(btnOpts.header)
+                  }),
+                  ...(btnOpts.body && {
+                    body: proto.Message.InteractiveMessage.Body.create(btnOpts.body)
+                  }),
+                  ...(btnOpts.footer && {
+                    footer: proto.Message.InteractiveMessage.Footer.create(btnOpts.footer)
+                  }),
+                  nativeFlowMessage: proto.Message.InteractiveMessage.NativeFlowMessage.create({
+                    buttons: interactiveBtn as any
+                  })
+                })
+              }
+            }
           }, quoted)
 
           await conn!!.relayMessage(jid, msg.message, {
             messageId: msg.key.id,
-            additionalNodes: [
-              {
-                tag: "biz",
-                attrs: {},
-                content: [{
-                  tag: "interactive",
-                  attrs: {
-                    type: "native_flow",
-                    v: "1"
-                  },
-                  content: [{
-                    tag: "native_flow",
-                    attrs: {
-                      v: "9",
-                      name: "mixed"
-                    }
-                  }]
-                }]
-              }
-            ]
           })
         } catch (e) {
           console.error(`Error sending button message: ${e}`)
@@ -932,54 +916,38 @@ END:VCARD`.trim();
       ) {
         try {
           let msg = generateWAMessageFromContent(jid, {
-            messageContextInfo: {
-              deviceListMetadata: {},
-              deviceListMetadataVersion: 2
-            },
-            interactiveMessage: proto.Message.InteractiveMessage.create({
-              ...(btnOpts.contextInfo && {
-                contextInfo: btnOpts.contextInfo
-              }),
-              ...(btnOpts.header && {
-                header: proto.Message.InteractiveMessage.Header.create(btnOpts.header)
-              }),
-              ...(btnOpts.body && {
-                body: proto.Message.InteractiveMessage.Body.create(btnOpts.body)
-              }),
-              ...(btnOpts.footer && {
-                footer: proto.Message.InteractiveMessage.Footer.create(btnOpts.footer)
-              }),
-              nativeFlowMessage: proto.Message.InteractiveMessage.NativeFlowMessage.create({
-                buttons: [{
-                  name: "single_select",
-                  buttonParamsJson: JSON.stringify(buttons)
-                }]
-              })
-            })
+            viewOnceMessage: {
+              message: {
+                messageContextInfo: {
+                  deviceListMetadata: {},
+                  deviceListMetadataVersion: 2
+                },
+                interactiveMessage: proto.Message.InteractiveMessage.create({
+                  ...(btnOpts.contextInfo && {
+                    contextInfo: btnOpts.contextInfo
+                  }),
+                  ...(btnOpts.header && {
+                    header: proto.Message.InteractiveMessage.Header.create(btnOpts.header)
+                  }),
+                  ...(btnOpts.body && {
+                    body: proto.Message.InteractiveMessage.Body.create(btnOpts.body)
+                  }),
+                  ...(btnOpts.footer && {
+                    footer: proto.Message.InteractiveMessage.Footer.create(btnOpts.footer)
+                  }),
+                  nativeFlowMessage: proto.Message.InteractiveMessage.NativeFlowMessage.create({
+                    buttons: [{
+                      name: "single_select",
+                      buttonParamsJson: JSON.stringify(buttons)
+                    }]
+                  })
+                })
+              }
+            }
           }, quoted)
 
           await conn!!.relayMessage(jid, msg.message, {
-            messageId: msg.key.id,
-            additionalNodes: [
-              {
-                tag: "biz",
-                attrs: {},
-                content: [{
-                  tag: "interactive",
-                  attrs: {
-                    type: "native_flow",
-                    v: "1"
-                  },
-                  content: [{
-                    tag: "native_flow",
-                    attrs: {
-                      v: "9",
-                      name: "mixed"
-                    }
-                  }]
-                }]
-              }
-            ]
+            messageId: msg.key.id
           })
         } catch (e) {
           console.error(e)
