@@ -18,9 +18,7 @@ global.APIs = {
 }
 
 global.APIKeys = {
-  // 'https://website': 'apikey'
-  
-  'https://api.paxsenix.org': 'your_api_key' // Get Apikey: https://api.paxsenix.org
+  PaxSenixAPIKey: 'your_api_key' // Get Apikey: https://api.paxsenix.org
 }
 
 global.thumb = "https://files.catbox.moe/7n4axc.png"
