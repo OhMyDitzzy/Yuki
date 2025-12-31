@@ -74,19 +74,19 @@ Reply with the code to verify.`;
     if (step === 1) {
       if (m.text !== otp) {
         attempts = (attempts || 0) + 1;
-        
+
         if (attempts >= 3) {
           clearTimeout(timeout);
           await conn!!.sendMessage(m.chat, { delete: key });
           delete conn!!.register[m.chat]?.[m.sender];
-          return await conn!!.sendMessage(m.chat, { 
-            text: `🚩 Maximum attempts reached (3/3).\nYour verification code was wrong.\n\nPlease use \`/register\` to start again.` 
+          return await conn!!.sendMessage(m.chat, {
+            text: `🚩 Maximum attempts reached (3/3).\nYour verification code was wrong.\n\nPlease use \`/register\` to start again.`
           }, { quoted: m });
         }
 
         conn!!.register[m.chat][m.sender].attempts = attempts;
-        return await conn!!.sendMessage(m.chat, { 
-          text: `🚩 Wrong captcha code. (${attempts}/3 attempts)\nPlease try again.` 
+        return await conn!!.sendMessage(m.chat, {
+          text: `🚩 Wrong captcha code. (${attempts}/3 attempts)\nPlease try again.`
         }, { quoted: m });
       }
 
@@ -117,8 +117,8 @@ Please enter your name:
       if (name.length < 3) {
         await conn!!.sendMessage(m.chat, { delete: key });
         delete conn!!.register[m.chat]?.[m.sender];
-        return await conn!!.sendMessage(m.chat, { 
-          text: "🚩 Name must be at least 3 characters long.\n\nPlease use `/register` to start again." 
+        return await conn!!.sendMessage(m.chat, {
+          text: "🚩 Name must be at least 3 characters long.\n\nPlease use `/register` to start again."
         }, { quoted: m });
       }
 
@@ -151,16 +151,16 @@ Please enter your age:
       if (isNaN(age)) {
         await conn!!.sendMessage(m.chat, { delete: key });
         delete conn!!.register[m.chat]?.[m.sender];
-        return await conn!!.sendMessage(m.chat, { 
-          text: "🚩 Invalid age, please enter a valid number.\n\nPlease use `/register` to start again." 
+        return await conn!!.sendMessage(m.chat, {
+          text: "🚩 Invalid age, please enter a valid number.\n\nPlease use `/register` to start again."
         }, { quoted: m });
       }
 
       if (age < 13) {
         await conn!!.sendMessage(m.chat, { delete: key });
         delete conn!!.register[m.chat]?.[m.sender];
-        return await conn!!.sendMessage(m.chat, { 
-          text: "🚩 You must be at least 13 years old to register.\n\nPlease use `/register` to start again." 
+        return await conn!!.sendMessage(m.chat, {
+          text: "🚩 You must be at least 13 years old to register.\n\nPlease use `/register` to start again."
         }, { quoted: m });
       }
 
@@ -190,14 +190,14 @@ Please enter your age:
 
 ━━━━━━━━━━━━━━━━━━━━
 📝 Enter password (6-20 characters)
-🔄 Or reply *"skip"* to continue
+🔄 Or click *"Skip"* to continue
 
 💡 Password will be used for:
 • 🎮 RPG game features
 • 🔒 Account security
 • 💰 Transaction confirmation`;
 
-      let messagePassword = await conn!!.sendMessage(m.chat, { text: passwordCaption }, { quoted: v4 });
+      let messagePassword = await conn!!.sendMessage(m.chat, { text: passwordCaption, buttons: [{ buttonId: "skip", buttonText: { displayText: "Skip" }, type: 1 }], headerType: 1, viewOnce: true }, { quoted: v4 });
       let passwordTimeout = setTimeout(async () => {
         await conn!!.sendMessage(m.chat, { delete: messagePassword!!.key });
         delete conn!!.register[m.chat]?.[m.sender];
@@ -208,7 +208,7 @@ Please enter your age:
     } else if (step === 4) {
       clearTimeout(timeout);
       await conn!!.sendMessage(m.chat, { delete: key });
-      
+
       let user = global.db.data.users[m.sender];
       let senderLid = await conn!!.getJid(m.sender);
       let ppUrl = await conn!!.profilePictureUrl(m.sender, 'image').catch((_) => "https://telegra.ph/file/1dff1788814dd281170f8.jpg");
@@ -259,7 +259,7 @@ Please enter your age:
 
 ━━━━━━━━━━━━━━━━━━━━
 🎉 Welcome to Yuki Botz!
-Type *menu* to get started!`;
+Type *.menu* to get started!`;
 
       await conn!!.sendMessage(m.chat, {
         text: tteks,
