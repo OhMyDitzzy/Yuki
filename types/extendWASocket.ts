@@ -21,6 +21,14 @@ type ExtendedWAUser = WASocket["user"] & {
   jid?: string;
 }
 
+type PollOption = [string] | [string, string];
+
+interface SendPollOptions extends MessageRelayOptions {
+  pollId?: string;
+  multiselect?: boolean;
+  selectableCount?: number;
+}
+
 export interface FileResult {
   res?: any;
   filename?: string;
@@ -178,9 +186,9 @@ export interface ExtendedWASocket extends WASocket {
   sendPoll(
     jid: string,
     name?: string,
-    optiPoll?: any,
-    options?: MessageRelayOptions
-  ): Promise<any>;
+    optiPoll?: PollOption[] | string[],
+    options?: SendPollOptions
+  ): Promise<proto.WebMessageInfo>;
 
   downloadAndSaveMediaMessage(
     message: any,

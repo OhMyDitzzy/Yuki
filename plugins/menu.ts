@@ -65,14 +65,59 @@ function extractCommands(cmd: any): string[] {
   return [];
 }
 
+function getGlobalMostUsed(usedPrefix: string, limit = 3) {
+  const commandUsage = global.db.data.commandUsage || {};
+  
+  const entries = Object.values(commandUsage);
+  
+  if (entries.length === 0) return [];
+  
+  return entries
+    .sort((a: any, b: any) => b.count - a.count)
+    .slice(0, limit)
+    .map((stat: any) => ({
+      title: `${stat.name}`,
+      description: `${stat.description}\n🔥 Used ${stat.count.toLocaleString()} times globally\n📝 ${usedPrefix}${stat.command}`,
+      id: `${usedPrefix}${stat.command}`
+    }));
+}
+
+async function showProgress(conn: any, chat: string) {
+  const progressSteps = [
+    { text: "🔍 Scanning bot system...", progress: "▰▰▱▱▱▱▱▱▱▱", percent: "20%" },
+    { text: "👤 Loading user profile...", progress: "▰▰▰▰▱▱▱▱▱▱", percent: "40%" },
+    { text: "🎨 Rendering rank card...", progress: "▰▰▰▰▰▰▱▱▱▱", percent: "60%" },
+    { text: "🔌 Indexing plugins...", progress: "▰▰▰▰▰▰▰▰▱▱", percent: "80%" },
+    { text: "📋 Building menu list...", progress: "▰▰▰▰▰▰▰▰▰▱", percent: "90%" },
+    { text: "✅ Ready to serve!", progress: "▰▰▰▰▰▰▰▰▰▰", percent: "100%" }
+  ];
+
+  let lastMsg: any = null;
+
+  for (const step of progressSteps) {
+    const text = `${step.text}\n\n${step.progress} ${step.percent}\n\n_Please wait..._`;
+    
+    if (lastMsg) {
+      lastMsg = await conn.sendMessage(chat, { text, edit: lastMsg.key });
+    } else {
+      lastMsg = await conn.sendMessage(chat, { text });
+    }
+    
+    await new Promise(resolve => setTimeout(resolve, 250));
+  }
+
+  return lastMsg;
+}
+
 let handler: PluginHandler = {
   name: "Menu Bot",
   description: "Show menu list",
   cmd: ["menu", "help"],
   tags: ["public"],
   register: true,
-  exec: async (m, { conn, text, usedPrefix = "." }) => {
+  exec: async (m, { conn, text, usedPrefix }) => {
     try {
+      const loadingMsg = await showProgress(conn!!, m.chat);
       let packageInfo: any = {};
       try {
         const pkgPath = join(process.cwd(), "package.json");
@@ -80,7 +125,7 @@ let handler: PluginHandler = {
       } catch {
         packageInfo = { version: "1.0.0" };
       }
-
+      
       const registered = global.db?.data?.users?.[m.sender]?.registered || false;
       const name = registered
         ? global.db.data.users[m.sender].name
@@ -98,7 +143,7 @@ let handler: PluginHandler = {
 
       if (currentXp < 0) currentXp = 0;
       if (currentXp < 0) requiredXp = 0;
-
+      
       const rankBuffer = await new canvafy.Rank()
         .setAvatar(ppUrl)
         .setBackground("image", "https://telegra.ph/file/98225485a33fc4a5b47b2.jpg")
@@ -109,7 +154,7 @@ let handler: PluginHandler = {
         .setRequiredXp(requiredXp, "#000")
         .setRankColor({ text: "#fff", number: "#fff" } as any)
         .build();
-
+        
       const allPlugins: PluginInfo[] = [];
       for (const [pluginName, metadata] of metadataMap.entries()) {
         const plugin = global.plugins[pluginName];
@@ -137,8 +182,7 @@ let handler: PluginHandler = {
           groupedByTag[tagKey].push(plugin);
         });
       });
-
-      m.react("⏳")
+      
       const sections: ListV2["sections"] = [];
 
       if (!text) {
@@ -159,7 +203,16 @@ let handler: PluginHandler = {
         headerText += `│ • Limit: ${user.limit}\n`;
         headerText += `╰───────────────────\n\n`;
         headerText += `💡 *Select a category below to see features!*`;
-
+        
+        const mostUsed = getGlobalMostUsed(usedPrefix, 3);
+        if (mostUsed.length > 0) {
+          sections.push({
+            title: "🔥 Most Used Commands",
+            highlight_label: "Popular globally",
+            rows: mostUsed
+          });
+        }
+        
         const tagRows = Object.entries(groupedByTag).map(([tag, plugins]) => {
           const displayTag = tagDisplayNames[tag] || `${tag.charAt(0).toUpperCase() + tag.slice(1)} 📌`;
           return {
@@ -179,7 +232,9 @@ let handler: PluginHandler = {
           title: "🎯 Select Category",
           sections
         };
-
+        
+        await conn?.sendMessage(m.chat, { delete: loadingMsg.key });
+        
         await conn?.sendListV2(
           m.chat,
           {
@@ -211,8 +266,7 @@ let handler: PluginHandler = {
           list,
           { userJid: conn.user.id, quoted: payment as any }
         );
-
-        m.react("✅");
+        
         return;
       }
 
@@ -272,11 +326,12 @@ let handler: PluginHandler = {
       headerText += `╰───────────────────\n\n`;
       headerText += `💡 *Select a feature below!*`;
 
-      m.react("⏳")
       const list: ListV2 = {
         title: "🎯 Select Feature",
         sections
       };
+      
+      await conn?.sendMessage(m.chat, { delete: loadingMsg.key });
 
       await conn?.sendListV2(
         m.chat,
@@ -296,7 +351,6 @@ let handler: PluginHandler = {
         list,
         { userJid: conn.user.id, quoted: m }
       );
-      m.react("✅")
     } catch (e) {
       console.error("Error in menu plugin:", e);
       await conn?.reply(m.chat, "❌ Sorry, an error occurred while executing the menu command.", m);

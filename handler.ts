@@ -398,6 +398,34 @@ export async function handler(chatUpdate: BaileysEventMap["messages.upsert"]) {
           stat.success += 1
           stat.lastSuccess = now
         }
+        
+        if (m.isCommand && m.error == null) {
+          const plugin = global.plugins[m.plugin];
+          if (plugin && plugin.cmd) {
+            let commandToTrack = '';
+          
+            if (Array.isArray(plugin.cmd)) {
+              const firstCmd = plugin.cmd[0];
+              if (typeof firstCmd === 'string') {
+                commandToTrack = firstCmd;
+              } else if (firstCmd instanceof RegExp) {
+                const pattern = firstCmd.source;
+                const match = pattern.match(/^\^?\(?([a-z0-9_-]+)/i);
+                if (match) commandToTrack = match[1];
+              }
+            } else if (typeof plugin.cmd === 'string') {
+              commandToTrack = plugin.cmd;
+            } else if (plugin.cmd instanceof RegExp) {
+              const pattern = plugin.cmd.source;
+              const match = pattern.match(/^\^?\(?([a-z0-9_-]+)/i);
+              if (match) commandToTrack = match[1];
+            }
+          
+            if (commandToTrack) {
+              trackCommandUsage(m.plugin, commandToTrack);
+            }
+          }
+        }
       }
     }
     try {
@@ -412,6 +440,43 @@ export async function handler(chatUpdate: BaileysEventMap["messages.upsert"]) {
         m.isGroup ? m.sender : undefined,
         m.id || m.key.id,
       ).catch(() => { });
+  }
+}
+
+function trackCommandUsage(pluginName: string, command: string) {
+  try {
+    if (!global.db.data.commandUsage) {
+      global.db.data.commandUsage = {};
+    }
+    
+    const plugin = global.plugins[pluginName];
+    if (!plugin) return;
+    
+    const commandKey = command.toLowerCase();
+    const metadata = global.commandCache?.getMetadata()?.get(pluginName);
+    
+    if (!global.db.data.commandUsage[commandKey]) {
+      global.db.data.commandUsage[commandKey] = {
+        pluginName: pluginName,
+        name: metadata?.name || plugin.name || command,
+        description: metadata?.description || plugin.description || '',
+        command: commandKey,
+        count: 0,
+        lastUsed: Date.now(),
+        tags: metadata?.tags || plugin.tags || []
+      };
+    }
+    
+    global.db.data.commandUsage[commandKey].count++;
+    global.db.data.commandUsage[commandKey].lastUsed = Date.now();
+    
+    const entries = Object.entries(global.db.data.commandUsage);
+    if (entries.length > 100) {
+      const sorted = entries.sort((a: any, b: any) => b[1].count - a[1].count);
+      global.db.data.commandUsage = Object.fromEntries(sorted.slice(0, 100));
+    }
+  } catch (e) {
+    console.error('Error tracking command usage:', e);
   }
 }
 

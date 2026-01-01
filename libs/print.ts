@@ -39,7 +39,7 @@ export default async function print(m: ExtendedWAMessage, conn: any, _user?: any
     : m.text ? m.text.length : 0) || 0;
 
   const user = global.db.data.users[sender] || global.db.data.users[m.sender];
-  const me = PhoneNumber('+' + (await conn.getJid(conn.user.lid) || '').replace('@s.whatsapp.net', '')).getNumber('international');
+  const me = PhoneNumber('+' + (await conn.getJid(conn.user.id) || '').replace('@s.whatsapp.net', '')).getNumber('international');
 
   console.log(`
 ╭┈❲ ${chalk.redBright('%s')}

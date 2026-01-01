@@ -1447,23 +1447,35 @@ END:VCARD`.trim();
         jid: string,
         name = "",
         optiPoll: any,
-        options: MessageRelayOptions,
+        options: any = {},
       ) {
         if (!Array.isArray(optiPoll[0]) && typeof optiPoll[0] === "string")
           optiPoll = [optiPoll];
-        if (!options) options = {};
+
+        const pollId = options.pollId || `poll_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+
         const pollMessage = {
           name: name,
-          options: optiPoll.map((btn: any) => ({
-            optionName: (!nullish(btn[0]) && btn[0]) || "",
-          })),
-          selectableOptionsCount: 1,
+          values: optiPoll.map((btn: any) => (!nullish(btn[0]) && btn[0]) || ""),
+          multiselect: options.multiselect || false,
+          selectableCount: options.selectableCount || 1,
         };
-        return conn.relayMessage(
-          jid,
-          { pollCreationMessage: pollMessage },
-          { ...options },
-        );
+
+        const sentMsg = await conn.sendMessage(jid, { poll: pollMessage }, options);
+
+        if (!global.pollMappings) global.pollMappings = {};
+
+        const msgKey = sentMsg.key.id;
+        global.pollMappings[msgKey] = {
+          pollId,
+          options: optiPoll.map((btn: any, index: number) => ({
+            id: Array.isArray(btn) && btn[1] ? btn[1] : `option_${index}`,
+            name: (!nullish(btn[0]) && btn[0]) || "",
+            index
+          }))
+        };
+
+        return sentMsg;
       },
     },
 
