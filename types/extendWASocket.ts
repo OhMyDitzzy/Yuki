@@ -214,6 +214,17 @@ export interface ExtendedWASocket extends WASocket {
     forwardingScore?: boolean | number,
     options?: any
   ): Promise<any>;
+  
+  execCall(m: ExtendedWAMessage, command: string, ...params: any[]): Promise<{
+    success: boolean;
+    result?: any;
+    message?: ExtendedWAMessage;
+    plugin?: string;
+    command?: string;
+    error?: string;
+    params?: any[];
+    stack?: string;
+  }>;
 
   fakeReply(
     jid: string,

@@ -14,6 +14,7 @@ import _makeWASockets, {
   getDevice,
   isJidGroup,
   jidDecode,
+  jidNormalizedUser,
   normalizeMessageContent,
   prepareWAMessageMedia,
   proto,
@@ -528,6 +529,257 @@ export function makeWASocket(
         }
       },
       enumerable: true,
+    },
+    execCall: {
+      async value(m: any, command: string, ...params: any[]) {
+        try {
+          const cleanCommand = command.replace(/^[.!#\/\\]/, '').trim().toLowerCase();
+
+          let targetPlugin: any = null;
+          let pluginName: string = '';
+
+          for (let name in global.plugins) {
+            let plugin = global.plugins[name];
+            if (!plugin || typeof plugin.exec !== 'function') continue;
+
+            const isMatch = plugin.cmd instanceof RegExp
+              ? plugin.cmd.test(cleanCommand)
+              : Array.isArray(plugin.cmd)
+                ? plugin.cmd.some((cmd: any) =>
+                  cmd instanceof RegExp ? cmd.test(cleanCommand) : cmd === cleanCommand
+                )
+                : typeof plugin.cmd === 'string'
+                  ? plugin.cmd === cleanCommand
+                  : false;
+
+            if (isMatch) {
+              targetPlugin = plugin;
+              pluginName = name;
+              break;
+            }
+          }
+
+          if (!targetPlugin) {
+            throw new Error(`Command '${cleanCommand}' not found`);
+          }
+
+          if (targetPlugin.disabled && !global.db.data.users[m.sender]?.moderator) {
+            return {
+              success: false,
+              error: 'Command is currently disabled',
+              command: cleanCommand,
+            };
+          }
+
+          const usedPrefix = command.match(/^[.!#\/\\]/)?.[0] || (global.prefix?.[0] || '.');
+          const text = params.join(' ');
+          const args = params;
+          const _args = params;
+          const noPrefix = `${cleanCommand} ${text}`.trim();
+
+          const groupMetadata = m.isGroup
+            ? await conn.groupMetadata(m.chat).catch(() => ({}))
+            : {};
+          const participants = m.isGroup ? (groupMetadata.participants || []) : [];
+
+          let user: any = null;
+          let bot: any = null;
+
+          if (m.isGroup && participants.length > 0) {
+            const senderLid = await conn.getLid(m.sender);
+            user = participants.find((u: any) => u.id === senderLid) ||
+              participants.find((u: any) => conn.decodeJid(u.id) === m.sender);
+
+            const botLid = conn.user?.lid;
+            bot = participants.find((u: any) => u.id === botLid) ||
+              participants.find((u: any) => u.phoneNumber === jidNormalizedUser(conn.user.id));
+          }
+
+          const ownerLids = await Promise.all(
+            [conn.decodeJid(conn.user.id), ...global.owner.map(([number]: any) => number)]
+              .map((v: string) => v.replace(/[^0-9]/g, '') + '@s.whatsapp.net')
+              .map((jid: string) => conn.getLid(jid))
+          );
+
+          const senderLid = await conn.getLid(m.sender);
+          const isROwner = ownerLids.includes(senderLid);
+          const isOwner = isROwner || m.fromMe;
+
+          const modsLids = await Promise.all(
+            global.mods.map((v: any) => v.replace(/[^0-9]/g, '') + '@s.whatsapp.net')
+              .map((jid: string) => conn.getLid(jid))
+          );
+          const isMods = isOwner || modsLids.includes(senderLid);
+          const isPrems = isROwner || global.db.data.users[m.sender]?.premium;
+          const isBans = global.db.data.users[m.sender]?.banned;
+
+          const isRAdmin = user?.admin === 'superadmin';
+          const isAdmin = isRAdmin || user?.admin === 'admin';
+          const isBotAdmin = !!bot?.admin;
+
+          if (targetPlugin.rowner && !isROwner) {
+            return {
+              success: false,
+              error: 'This command requires real owner permission',
+              command: cleanCommand,
+            };
+          }
+
+          if (targetPlugin.owner && !isOwner) {
+            return {
+              success: false,
+              error: 'This command requires owner permission',
+              command: cleanCommand,
+            };
+          }
+
+          if (targetPlugin.mods && !isMods) {
+            return {
+              success: false,
+              error: 'This command requires moderator permission',
+              command: cleanCommand,
+            };
+          }
+
+          if (targetPlugin.premium && !isPrems) {
+            return {
+              success: false,
+              error: 'This command requires premium membership',
+              command: cleanCommand,
+            };
+          }
+
+          if (targetPlugin.group && !m.isGroup) {
+            return {
+              success: false,
+              error: 'This command can only be used in groups',
+              command: cleanCommand,
+            };
+          }
+
+          if (targetPlugin.botAdmin && !isBotAdmin) {
+            return {
+              success: false,
+              error: 'Bot needs to be admin to use this command',
+              command: cleanCommand,
+            };
+          }
+
+          if (targetPlugin.admin && !isAdmin) {
+            return {
+              success: false,
+              error: 'You need to be admin to use this command',
+              command: cleanCommand,
+            };
+          }
+
+          if (targetPlugin.private && m.isGroup) {
+            return {
+              success: false,
+              error: 'This command can only be used in private chat',
+              command: cleanCommand,
+            };
+          }
+
+          const checkTarget = async (targetJid: string) => {
+            if (!targetJid || !m.isGroup) {
+              return {
+                targetROwner: false,
+                targetMods: false,
+                targetRAdmin: false,
+                targetAdmin: false,
+                targetUser: null
+              };
+            }
+
+            const targetLid = await conn.getLid(targetJid);
+            const targetROwner = ownerLids.includes(targetLid);
+            const targetMods = targetROwner || modsLids.includes(targetLid);
+
+            let targetUser: any = null;
+            for (const p of participants) {
+              const lid = await conn.getLid(p.id);
+              if (lid === targetLid) {
+                targetUser = p;
+                break;
+              }
+            }
+
+            const targetRAdmin = targetUser?.admin === 'superadmin';
+            const targetAdmin = targetRAdmin || targetUser?.admin === 'admin';
+
+            return {
+              targetROwner,
+              targetMods,
+              targetRAdmin,
+              targetAdmin,
+              targetUser
+            };
+          };
+
+          const extra = {
+            match: [[usedPrefix + cleanCommand, new RegExp(`^${usedPrefix}${cleanCommand}`)], new RegExp(`^${usedPrefix}${cleanCommand}`)],
+            usedPrefix,
+            noPrefix,
+            _args,
+            args,
+            body: m.text,
+            command: cleanCommand,
+            text,
+            conn,
+            participants,
+            groupMetadata,
+            user,
+            bot,
+            isROwner,
+            isOwner,
+            isRAdmin,
+            isAdmin,
+            isBotAdmin,
+            isPrems,
+            isBans,
+            delay: (ms: number) => new Promise(resolve => setTimeout(resolve, ms)),
+            chatUpdate: {
+              messages: [m],
+              type: 'append' as const,
+            },
+            checkTarget,
+          };
+
+          m.isCommand = true;
+          m.plugin = pluginName;
+
+          const result = await targetPlugin.exec.call(conn, m, extra);
+
+          return {
+            success: true,
+            result,
+            message: m,
+            plugin: pluginName,
+            command: cleanCommand,
+          };
+
+        } catch (error: any) {
+          console.error('execCall error:', error);
+          return {
+            success: false,
+            error: error.message || String(error),
+            command: command,
+            params,
+            stack: error.stack,
+          };
+        }
+      },
+      enumerable: true,
+      writable: true,
+      configurable: true,
+    },
+    error: {
+      value(m: any, e: any) {
+        const text = `It looks like you're having trouble executing this command. Would you like to report it to the owner?`
+        conn.sendMessage(m.chat, { text, buttons: [{ buttonId: `.report ${e}`, buttonText: { displayText: "Yes" }, type: 1 }], headerType: 1, viewOnce: true }, { quoted: m })
+      },
+      enumerable: true
     },
     sendSticker: {
       async value(
@@ -2158,7 +2410,7 @@ END:VCARD`.trim();
       }
       : {}),
   });
-  
+
   store.readFromDatabase();
   store.startAutoSave();
   store.bind(conn.ev)

@@ -1,3 +1,6 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+
 let handler: any = m => m;
 handler.all = async function(m: any) {
   global.doc = pickRandom([
@@ -6,6 +9,13 @@ handler.all = async function(m: any) {
     "application/msword",
     "application/pdf"
   ]);
+
+  try {
+    const pkgPath = join(process.cwd(), "package.json");
+    global.packageInfo = JSON.parse(readFileSync(pkgPath, "utf-8"));
+  } catch {
+    global.packageInfo = { version: "1.0.0" };
+  }
 }
 
 export default handler;

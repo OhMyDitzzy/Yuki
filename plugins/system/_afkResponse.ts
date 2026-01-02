@@ -31,7 +31,7 @@ handler.before = (m: ExtendedWAMessage) => {
     m.reply(
       `
 *Dont Tag Him/Her!*
-*He/She is AFK ${reason ? "with reason :* " + reason : "No reason"}
+*He/She is AFK ${reason ? "with reason :* " + reason : "with no reason*"}
 *Afk Duration:* ${clockString(new Date() as any - afkTime)}
 `.trim(),
     );

@@ -10,6 +10,7 @@ global.owner = [
   ['62851xxxx', 'DitzDev', 'contact@ditzdev.my.id', true]
 ] // Put your number here for owner
 global.mods = ['62851xxxx'] // Moderator
+global.nomorown = "62851xxxx" // your number here
 
 // Will be filled in later
 global.APIs = {
