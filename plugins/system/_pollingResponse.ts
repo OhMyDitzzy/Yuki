@@ -97,6 +97,9 @@ export async function all(m: ExtendedWAMessage, chatUpdate: BaileysEventMap["mes
     }]
   }, userJid);
 
+  const selectedOptions = decryptedVote.selectedOptions || [];
+  const isUnvote = selectedOptions.length === 0;
+
   const winningOption = aggregate.find(options => options.voters.length !== 0)?.name;
   
   const pollMapping = global.pollMappings[creationMsgKey.id];
@@ -122,10 +125,17 @@ export async function all(m: ExtendedWAMessage, chatUpdate: BaileysEventMap["mes
     };
   });
   
-  const extendedId = extendedAggregate.find(v => v.name === winningOption).id;
+  const extendedId = extendedAggregate.find(v => v.name === winningOption)?.id;
+
+  let responseText;
+  if (isUnvote) {
+    responseText = 'unvote';
+  } else {
+    responseText = extendedId || winningOption || '';
+  }
 
   let messages = await generateWAMessage(m.chat, {
-    text: extendedId || winningOption,
+    text: responseText,
     mentions: m.mentionedJid
   }, {
     userJid: this.user.jid,

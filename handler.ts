@@ -1,4 +1,5 @@
 import type { BaileysEventMap } from "baileys"
+import { jidNormalizedUser } from "baileys"
 import { smsg } from "./libs/serialize";
 import type { ExtendedWAMessage } from "./types/extendWAMessage";
 import util from "node:util";
@@ -78,17 +79,19 @@ export async function handler(chatUpdate: BaileysEventMap["messages.upsert"]) {
     m.exp += Math.ceil(Math.random() * 10);
     let usedPrefix: any
     let _user = global.db.data && global.db.data.users && global.db.data.users[m.sender]
-    const groupMetadata = (m.isGroup ? (conn.chats[m.chat] || {}).metadata : {}) || {}
+    const subGroupMetadata = await (m.isGroup? conn.groupMetadata(m.chat) : {})
+    const groupMetadata = (m.isGroup ? (conn.chats[m.chat] || {}).metadata : {}) || subGroupMetadata
+    
     const participants = (m.isGroup ? groupMetadata.participants : []) || []
     let user: any
     let bot: any
 
     user = participants.find(u => conn.decodeJid(u.id) === m.sender) || participants.find(u => u.id === senderLid)
-    bot = participants.find(u => conn.decodeJid(u.id) === conn.user.jid) || participants.find(u => u.id === conn.user.lid)   
+    bot = participants.find(u => u.phoneNumber === jidNormalizedUser(conn.user.id)) || participants.find(u => u.id === conn.user.lid)   
 
     const isRAdmin = user?.admin === 'superadmin'
     const isAdmin = isRAdmin || user?.admin === 'admin'
-    const isBotAdmin = !!bot?.admin;
+    const isBotAdmin = !!bot?.admin || !!bot?.admin === 'admin';
 
     const checkTarget = async (targetJid: string) => {
       if (!targetJid || !m.isGroup) return {
