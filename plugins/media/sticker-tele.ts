@@ -479,6 +479,8 @@ _Processing sticker packs, this might take a while..._`.trim());
       }
 
       throw `❌ Failed to process sticker pack: ${errorMsg}`;
+      
+      conn!!.error(m, e)
 
     } finally {
       delete conn!!.stickerTeleProcessing[m.sender];

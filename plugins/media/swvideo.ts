@@ -111,6 +111,7 @@ let handler: PluginHandler = {
 
     } catch (e: any) {
       m.react("❌");
+      conn!!.error(m, e)
 
       await unlink(inputPath).catch(() => { });
       await unlink(outputPath).catch(() => { });

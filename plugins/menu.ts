@@ -67,12 +67,34 @@ function extractCommands(cmd: any): string[] {
 
 function getGlobalMostUsed(usedPrefix: string, limit = 3) {
   const commandUsage = global.db.data.commandUsage || {};
+  const metadataMap = global.commandCache.getMetadata();
   
   const entries = Object.values(commandUsage);
   
   if (entries.length === 0) return [];
   
   return entries
+    .filter((stat: any) => {
+      let hasValidMetadata = false;
+      
+      for (const [pluginName, metadata] of metadataMap.entries()) {
+        const plugin = global.plugins[pluginName];
+        if (!plugin) continue;
+        
+        const commands = extractCommands(plugin.cmd);        
+        if (commands.includes(stat.command)) {
+          hasValidMetadata = !!(
+            metadata.name && 
+            metadata.description && 
+            metadata.tags && 
+            metadata.tags.length > 0
+          );
+          break;
+        }
+      }
+      
+      return hasValidMetadata;
+    })
     .sort((a: any, b: any) => b.count - a.count)
     .slice(0, limit)
     .map((stat: any) => ({

@@ -100,7 +100,7 @@ ${text}
     } catch (e) {
       m.react("❌")
       console.log(e)
-      throw `Error: ${e}`
+      conn!!.error(m, e)
     }
   }
 }

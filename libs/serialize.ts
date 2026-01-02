@@ -777,7 +777,7 @@ export function makeWASocket(
     error: {
       value(m: any, e: any) {
         const text = `It looks like you're having trouble executing this command. Would you like to report it to the owner?`
-        conn.sendMessage(m.chat, { text, buttons: [{ buttonId: `.report ${e}`, buttonText: { displayText: "Yes" }, type: 1 }], headerType: 1, viewOnce: true }, { quoted: m })
+        conn.sendMessage(m.chat, { text, buttons: [{ buttonId: `.reporterror ${e}\nOn: ${m.plugin}`, buttonText: { displayText: "Yes" }, type: 1 }], headerType: 1, viewOnce: true }, { quoted: m })
       },
       enumerable: true
     },

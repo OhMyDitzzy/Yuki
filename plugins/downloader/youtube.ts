@@ -45,6 +45,7 @@ let handler: PluginHandler = {
     } catch (e: any) {
       m.react("❌");
       console.error(e)
+      conn!!.error(m, e);
     }
   }
 }

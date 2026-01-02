@@ -44,6 +44,8 @@ let handler: PluginHandler = {
           key: m.key,
         }
       });
+      
+      conn!!.error(m, e);
     }
   }
 }

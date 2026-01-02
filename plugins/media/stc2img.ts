@@ -45,6 +45,7 @@ let handler: PluginHandler = {
         console.error("FFmpeg error:", e);
         m.react("❌");
         throw `Failed to convert sticker: ${e.message}`;
+        conn!!.error(m, e);
       }
     }
 

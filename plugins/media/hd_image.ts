@@ -100,7 +100,7 @@ let handler: PluginHandler = {
         m.react("❌");
         delete conn!!.enhancer[m.sender];
         const errorMsg = error instanceof Error ? error.message : "Process Failed...";
-        throw errorMsg;
+        conn!!.error(m, error)       
       }
       delete conn!!.enhancer[m.sender];
     }

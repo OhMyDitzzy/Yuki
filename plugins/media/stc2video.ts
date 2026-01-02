@@ -271,6 +271,7 @@ let handler: PluginHandler = {
       console.error("Conversion error:", e);
       m.react("❌");
       throw `Failed to convert to video: ${e.message}`;
+      conn!!.error(m, e)
     }
   },
 };
