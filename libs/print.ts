@@ -22,9 +22,9 @@ try {
 
 export default async function print(m: ExtendedWAMessage, conn: any, _user?: any) {
   const _name = await conn.getName(m.sender);
-  const senderJid = await conn.getJid(m.sender);
-  const sender = PhoneNumber('+' + senderJid.replace('@s.whatsapp.net', '')).getNumber('international') + (_name ? ' ~' + _name : '');
-  const chat = await conn.getName(m.chat);
+  const senderJid = m.sender ? await conn.getJid(m.sender) : "";
+  const sender = senderJid ? PhoneNumber('+' + senderJid.replace('@s.whatsapp.net', '')).getNumber('international') + (_name ? ' ~' + _name : '') : "Unknown Sender";
+  const chat = m.chat ? await conn.getName(m.chat) : 'Unknown Chat';
 
   const filesize = (m.msg ?
     m.msg.vcard ?
@@ -39,7 +39,10 @@ export default async function print(m: ExtendedWAMessage, conn: any, _user?: any
     : m.text ? m.text.length : 0) || 0;
 
   const user = global.db.data.users[sender] || global.db.data.users[m.sender];
-  const me = PhoneNumber('+' + (await conn.getJid(conn.user.id) || '').replace('@s.whatsapp.net', '')).getNumber('international');
+  const connUserId = conn.user?.id ? await conn.getJid(conn.user.id) : '';
+  const me = connUserId 
+    ? PhoneNumber('+' + connUserId.replace('@s.whatsapp.net', '')).getNumber('international')
+    : 'Unknown';
 
   console.log(`
 ╭┈❲ ${chalk.redBright('%s')}

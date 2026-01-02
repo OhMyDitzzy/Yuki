@@ -17,6 +17,9 @@ export async function handler(chatUpdate: BaileysEventMap["messages.upsert"]) {
   this.pushMessage(chatUpdate.messages).catch(console.error);
   let m = chatUpdate.messages[chatUpdate.messages.length - 1] as ExtendedWAMessage;
   if (!m) return;
+  if (m.key.fromMe) return;
+  if (m.key.remoteJid === 'status@broadcast') return;
+  if (m.isBaileys) return;
   if (global.db.data == null) await loadDatabase();
   if (m.mtype === "templateButtonReplyMessage") this.appenTextMessage(m.msg.selectedId, chatUpdate)
   try {
