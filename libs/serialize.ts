@@ -33,7 +33,7 @@ import type { ExtendedWAMessage } from "../types/extendWAMessage";
 import { makeInMemoryStore } from "./makeInMemoryStore.ts";
 import pino from "pino";
 
-global.store = await makeInMemoryStore({ logger: pino().child({ level: 'silent', stream: 'store' }) })
+global.store = await makeInMemoryStore({ logger: pino().child({ level: 'silent', stream: 'store' }), saveInterval: 60000 })
 
 // A code for button support from shannz, thanks to him
 // repo: https://github.com/Shannzx10/KurumiSaki/
@@ -2158,7 +2158,9 @@ END:VCARD`.trim();
       }
       : {}),
   });
-
+  
+  store.readFromDatabase();
+  store.startAutoSave();
   store.bind(conn.ev)
 
   if (sock.user?.id) sock.user.jid = sock.decodeJid(sock.user.id);

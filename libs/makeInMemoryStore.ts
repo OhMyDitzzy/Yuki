@@ -20,6 +20,9 @@ import {
   jidNormalizedUser,
   proto
 } from "baileys";
+import { Database } from 'bun:sqlite';
+import fs from 'node:fs';
+import path from 'node:path';
 
 interface ChatKey {
   key: (c: Chat) => string;
@@ -36,6 +39,7 @@ interface StoreConfig {
   chatKey?: ChatKey;
   labelAssociationKey?: LabelAssociationKey;
   logger?: any;
+  saveInterval?: number; // dalam milidetik, default 60000 (1 menit)
 }
 
 interface Label {
@@ -91,8 +95,11 @@ interface InMemoryStore {
   fetchMessageReceipts: (key: WAMessageKey) => Promise<MessageUserReceipt[] | undefined>;
   toJSON: () => any;
   fromJSON: (json: any) => void;
-  writeToFile: (path: string) => void;
-  readFromFile: (path: string) => void;
+  writeToDatabase: () => void;
+  readFromDatabase: () => void;
+  startAutoSave: () => void;
+  stopAutoSave: () => void;
+  cleanup: () => Promise<void>;
 }
 
 class ObjectRepository<T extends { id: string }> {
@@ -231,11 +238,45 @@ const waLabelAssociationKey: LabelAssociationKey = {
 const makeMessagesDictionary = (): MessagesDictionary =>
   makeOrderedDictionary(waMessageID);
 
+function initializeDatabase(dbPath: string): Database {
+  const dir = path.dirname(dbPath);
+  if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir, { recursive: true });
+  }
+
+  const db = new Database(dbPath);
+
+  db.run(`
+    CREATE TABLE IF NOT EXISTS store_data (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      key TEXT UNIQUE NOT NULL,
+      value TEXT NOT NULL,
+      updated_at INTEGER NOT NULL
+    )
+  `);
+
+  db.run(`CREATE INDEX IF NOT EXISTS idx_key ON store_data(key)`);
+
+  return db;
+}
+
 export const makeInMemoryStore = async (config: StoreConfig): Promise<InMemoryStore> => {
   const socket = config.socket;
   const chatKey = config.chatKey || waChatKey(true);
   const labelAssociationKey = config.labelAssociationKey || waLabelAssociationKey;
   const logger = config.logger || DEFAULT_CONNECTION_CONFIG.logger.child({ stream: 'in-mem-store' });
+  const saveInterval = config.saveInterval || 60000; // default 1 menit
+
+  const STORE_PATH = path.join(process.cwd(), 'data', 'store.db');
+  let saveIntervalId: NodeJS.Timeout | null = null;
+  let db: Database | null = null;
+
+  try {
+    db = initializeDatabase(STORE_PATH);
+    logger.info({ path: STORE_PATH }, 'SQLite database initialized');
+  } catch (e) {
+    logger.error({ error: e }, 'Failed to initialize database');
+  }
 
   const { default: KeyedDB } = await import("@adiwajshing/keyed-db");
 
@@ -450,7 +491,6 @@ export const makeInMemoryStore = async (config: StoreConfig): Promise<InMemorySt
         const list = messages[item.jid];
         list?.clear();
       } else {
-        // Weird error, Response is a WAMessageKey not WAMessageKey[]
         // @ts-ignore
         const jid = item.keys?.remoteJid!;
         const list = messages[jid];
@@ -545,6 +585,113 @@ export const makeInMemoryStore = async (config: StoreConfig): Promise<InMemorySt
     }
   };
 
+  const writeToDatabase = () => {
+    if (!db) {
+      logger.error('Database not initialized');
+      return;
+    }
+
+    try {
+      const data = toJSON();
+      const jsonString = JSON.stringify(data);
+      const timestamp = Date.now();
+
+      db.run('BEGIN TRANSACTION');
+      
+      const stmt = db.prepare(`
+        INSERT OR REPLACE INTO store_data (key, value, updated_at)
+        VALUES (?, ?, ?)
+      `);
+      
+      stmt.run('store', jsonString, timestamp);
+      
+      db.run('COMMIT');
+      
+      logger.debug('Store saved to SQLite database');
+    } catch (e) {
+      if (db) {
+        db.run('ROLLBACK');
+      }
+      logger.error({ error: e }, 'Failed to save store to database');
+    }
+  };
+
+  const readFromDatabase = () => {
+    if (!db) {
+      logger.error('Database not initialized');
+      return;
+    }
+
+    try {
+      const stmt = db.prepare('SELECT value FROM store_data WHERE key = ?');
+      const row = stmt.get('store') as { value: string } | null;
+
+      if (row) {
+        const json = JSON.parse(row.value);
+        fromJSON(json);
+        logger.info('Store loaded from SQLite database');
+      } else {
+        logger.debug('No existing store data found in database');
+      }
+    } catch (e) {
+      logger.error({ error: e }, 'Failed to load store from database');
+    }
+  };
+
+  const startAutoSave = () => {
+    if (saveIntervalId) {
+      logger.warn('Auto-save already running');
+      return;
+    }
+
+    logger.info({ interval: saveInterval }, 'Starting auto-save to SQLite');
+    
+    saveIntervalId = setInterval(() => {
+      writeToDatabase();
+    }, saveInterval);
+  };
+
+  const stopAutoSave = () => {
+    if (saveIntervalId) {
+      clearInterval(saveIntervalId);
+      saveIntervalId = null;
+      logger.info('Auto-save stopped');
+    }
+  };
+
+  const cleanup = async () => {
+    stopAutoSave();
+    writeToDatabase();
+
+    if (db) {
+      try {
+        db.close();
+        logger.info('Database connection closed');
+      } catch (e) {
+        logger.error({ error: e }, 'Failed to close database');
+      }
+    }
+    
+    try {
+      if (fs.existsSync(STORE_PATH)) {
+        fs.unlinkSync(STORE_PATH);
+        logger.info({ path: STORE_PATH }, 'Store database file deleted');
+      }
+      
+      const walPath = STORE_PATH + '-wal';
+      const shmPath = STORE_PATH + '-shm';
+      
+      if (fs.existsSync(walPath)) {
+        fs.unlinkSync(walPath);
+      }
+      if (fs.existsSync(shmPath)) {
+        fs.unlinkSync(shmPath);
+      }
+    } catch (e) {
+      logger.error({ error: e }, 'Failed to delete store database files');
+    }
+  };
+
   return {
     chats,
     contacts,
@@ -633,21 +780,11 @@ export const makeInMemoryStore = async (config: StoreConfig): Promise<InMemorySt
 
     toJSON,
     fromJSON,
-
-    writeToFile: (path: string) => {
-      const { writeFileSync } = require('fs');
-      writeFileSync(path, JSON.stringify(toJSON()));
-    },
-
-    readFromFile: (path: string) => {
-      const { readFileSync, existsSync } = require('fs');
-      if (existsSync(path)) {
-        logger.debug({ path }, 'reading from file');
-        const jsonStr = readFileSync(path, { encoding: 'utf-8' });
-        const json = JSON.parse(jsonStr);
-        fromJSON(json);
-      }
-    }
+    writeToDatabase,
+    readFromDatabase,
+    startAutoSave,
+    stopAutoSave,
+    cleanup
   };
 };
 

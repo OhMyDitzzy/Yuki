@@ -111,6 +111,11 @@ cleanupManager.addCleanupHandler(async () => {
     conn.logger.info('Saving database before shutdown...');
     await global.db.write().catch(console.error);
   }
+  
+  if (global.store) {
+    conn.logger.info('Cleaning up store...');
+    await global.store.cleanup();
+  }
 
   try {
     if (saveCredsFunction) {
@@ -317,6 +322,8 @@ global.reloadHandler = async function(restatConn: boolean) {
     };
 
     global.conn = makeWASocket(newConnOptions, { chats: oldChats });
+    
+    store.bind(global.conn.ev);
     isInit = true;
   }
 
