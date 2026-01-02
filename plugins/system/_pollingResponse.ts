@@ -101,7 +101,7 @@ export async function all(m: ExtendedWAMessage, chatUpdate: BaileysEventMap["mes
   const isUnvote = selectedOptions.length === 0;
 
   const winningOption = aggregate.find(options => options.voters.length !== 0)?.name;
-  
+
   const pollMapping = global.pollMappings[creationMsgKey.id];
 
   const extendedAggregate = aggregate.map(option => {
@@ -124,10 +124,10 @@ export async function all(m: ExtendedWAMessage, chatUpdate: BaileysEventMap["mes
       voterCount: option.voters.length
     };
   });
-  
+
   const extendedId = extendedAggregate.find(v => v.name === winningOption)?.id;
 
-  let responseText;
+  let responseText: any;
   if (isUnvote) {
     responseText = 'unvote';
   } else {
@@ -141,7 +141,7 @@ export async function all(m: ExtendedWAMessage, chatUpdate: BaileysEventMap["mes
     userJid: this.user.jid,
     quoted: m.quoted && m.quoted.fakeObj
   } as any)
-  
+
   messages.key.fromMe = areJidsSameUser(m.sender, this.user.id)
   messages.key.id = m.key.id
   messages.pushName = m.name
@@ -149,7 +149,7 @@ export async function all(m: ExtendedWAMessage, chatUpdate: BaileysEventMap["mes
 
   let msg = {
     ...chatUpdate,
-    messages: [proto.WebMessageInfo.create(messages)].map(v => (v.conn = this, v)),
+    messages: [proto.WebMessageInfo.create(messages)].map(v => ((v as any).conn = this, v)),
     type: "append"
   }
 

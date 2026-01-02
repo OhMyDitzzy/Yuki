@@ -8,7 +8,7 @@ let handler: PluginHandler = {
   cmd: ["votekick", "vk"],
   group: true,
   botAdmin: true,
-  exec: async (m, { conn, usedPrefix, text, command, args, checkTarget }) => {
+  exec: async (m, { conn, usedPrefix, command, args, checkTarget }) => {
     let sock = conn!!;
 
     sock.votekick = sock.votekick || {};
@@ -112,7 +112,7 @@ let handler: PluginHandler = {
       ["✅ Kick", `.vk ${who} yes`],
       ["❌ No", `.vk ${who} no`]
     ];
-    
+
     const names = await sock.getName(who);
 
     const sentPoll = await sock.sendPoll(
@@ -126,18 +126,20 @@ let handler: PluginHandler = {
         quoted: m
       }
     );
-    
-    let templategenerate = await generateWAMessageFromContent(m.chat, proto.Message.fromObject({pinInChatMessage: {
-      key: sentPoll.key,
-      type: 1,
-      senderTimestampMs: new Date().getTime() / 1000
-    }}), {})
-    
+
+    let templategenerate = generateWAMessageFromContent(m.chat, proto.Message.fromObject({
+      pinInChatMessage: {
+        key: sentPoll.key,
+        type: 1,
+        senderTimestampMs: new Date().getTime() / 1000
+      }
+    }), {} as any)
+
     let templatenew = {
       messageContextInfo: { messageAddOnDurationInSecs: 604800 },
       ...templategenerate.message
     }
-    
+
     await sock.relayMessage(m.chat, templatenew, { messageId: templategenerate.key.id })
 
     sock.votekick[who].pollMsgId = sentPoll.key.id;
@@ -146,7 +148,7 @@ let handler: PluginHandler = {
     const votekicks = conn!!.votekick;
     if (!votekicks) return false;
     if (m.text !== "unvote") return false;
-    
+
     const target = Object.keys(votekicks).find(jid =>
       votekicks[jid].groupId === m.chat
     );
@@ -155,14 +157,14 @@ let handler: PluginHandler = {
 
     const voteData = votekicks[target];
     const hasVoted = voteData.voters.includes(m.sender);
-    
+
     if (m.text === "unvote") {
       if (!hasVoted) return false
       voteData.vote -= 1;
       const voterIndex = voteData.voters.indexOf(m.sender);
       voteData.voters.splice(voterIndex, 1);
     }
-    
+
     return true;
   }
 }

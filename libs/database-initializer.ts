@@ -44,6 +44,7 @@ export function initializeUser(user: any, sender: string, m: any): void {
     age: -1,
     regTime: -1,
     afk: -1,
+    afkReason: '',
     snlast: 0,
     banned: false,
     bannedReason: '',
