@@ -73,10 +73,14 @@ Copy the example config and edit it:
 cp config/index.example.ts config/index.ts
 ```
 
-Edit `config/index.ts` and change the `global.pairing` value:
+Edit `config/index.ts` and change the value of `global.pairing` and don't forget to change the value of `global.owner` and `global.mods` with the correct/active number, otherwise an error may occur:
 ```typescript
 // Change to your bot's WhatsApp number (without + or spaces)
 global.pairing = '628123456789'
+global.owner = [
+  ['628123456789', 'YourName', 'example@gmail.com', true]
+]
+global.mods = ['628123456789']
 ```
 
 ### 4. Run the Bot
