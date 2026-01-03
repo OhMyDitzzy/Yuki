@@ -17,7 +17,6 @@ export async function handler(chatUpdate: BaileysEventMap["messages.upsert"]) {
   this.pushMessage(chatUpdate.messages).catch(console.error);
   let m = chatUpdate.messages[chatUpdate.messages.length - 1] as ExtendedWAMessage;
   if (!m) return;
-  if (m.key.fromMe) return;
   if (m.key.remoteJid === 'status@broadcast') return;
   if (m.isBaileys) return;
   if (global.db.data == null) await loadDatabase();
@@ -82,19 +81,19 @@ export async function handler(chatUpdate: BaileysEventMap["messages.upsert"]) {
     m.exp += Math.ceil(Math.random() * 10);
     let usedPrefix: any
     let _user = global.db.data && global.db.data.users && global.db.data.users[m.sender]
-    const subGroupMetadata = await (m.isGroup? conn.groupMetadata(m.chat) : {})
+    const subGroupMetadata = await (m.isGroup ? conn.groupMetadata(m.chat) : {})
     const groupMetadata = (m.isGroup ? (conn.chats[m.chat] || {}).metadata : {}) || subGroupMetadata
-    
+
     const participants = (m.isGroup ? groupMetadata.participants : []) || []
     let user: any
     let bot: any
 
     user = participants.find(u => conn.decodeJid(u.id) === m.sender) || participants.find(u => u.id === senderLid)
-    bot = participants.find(u => u.phoneNumber === jidNormalizedUser(conn.user.id)) || participants.find(u => u.id === conn.user.lid)   
+    bot = participants.find(u => u.phoneNumber === jidNormalizedUser(conn.user.id)) || participants.find(u => u.id === conn.user.lid)
 
     const isRAdmin = user?.admin === 'superadmin'
     const isAdmin = isRAdmin || user?.admin === 'admin'
-    const isBotAdmin = !!bot?.admin || !!bot?.admin === 'admin';
+    const isBotAdmin = !!bot?.admin // || !!bot?.admin === 'admin';
 
     const checkTarget = async (targetJid: string) => {
       if (!targetJid || !m.isGroup) return {
@@ -132,7 +131,7 @@ export async function handler(chatUpdate: BaileysEventMap["messages.upsert"]) {
 
     for (let name in global.plugins) {
       let plugin = global.plugins[name];
-      if (!plugin) continue;      
+      if (!plugin) continue;
       if (typeof plugin.all === "function") {
         try {
           await plugin.all.call(this, m, chatUpdate);
@@ -238,18 +237,18 @@ export async function handler(chatUpdate: BaileysEventMap["messages.upsert"]) {
             false;
 
       if (!isAccept) continue;
-      
+
       if (plugin.disabled && !global.db.data.users[m.sender].moderator) {
         await m.reply("Sorry, This command is currently disabled by the owner :(");
         return;
       }
-      
+
       m.plugin = name
       if (m.chat in global.db.data.chats || m.sender in global.db.data.users) {
         let chat = global.db.data.chats[m.chat]
         let user = global.db.data.users[m.sender]
         if (name != 'owner/unbanchat.ts' && chat && chat.isBanned) return
-        if (name != 'owner/unbanuser.ts' && user && user.banned) return
+        if (name != 'owner/unbanuser.ts' && user && user.banned && !user.moderator) return fail('banned', m, this)
       }
       if (plugin.rowner && plugin.owner && !(isROwner || isOwner)) {
         fail('owner', m, this)
@@ -404,12 +403,12 @@ export async function handler(chatUpdate: BaileysEventMap["messages.upsert"]) {
           stat.success += 1
           stat.lastSuccess = now
         }
-        
+
         if (m.isCommand && m.error == null) {
           const plugin = global.plugins[m.plugin];
           if (plugin && plugin.cmd) {
             let commandToTrack = '';
-          
+
             if (Array.isArray(plugin.cmd)) {
               const firstCmd = plugin.cmd[0];
               if (typeof firstCmd === 'string') {
@@ -426,7 +425,7 @@ export async function handler(chatUpdate: BaileysEventMap["messages.upsert"]) {
               const match = pattern.match(/^\^?\(?([a-z0-9_-]+)/i);
               if (match) commandToTrack = match[1];
             }
-          
+
             if (commandToTrack) {
               trackCommandUsage(m.plugin, commandToTrack);
             }
@@ -454,13 +453,13 @@ function trackCommandUsage(pluginName: string, command: string) {
     if (!global.db.data.commandUsage) {
       global.db.data.commandUsage = {};
     }
-    
+
     const plugin = global.plugins[pluginName];
     if (!plugin) return;
-    
+
     const commandKey = command.toLowerCase();
     const metadata = global.commandCache?.getMetadata()?.get(pluginName);
-    
+
     if (!global.db.data.commandUsage[commandKey]) {
       global.db.data.commandUsage[commandKey] = {
         pluginName: pluginName,
@@ -472,10 +471,10 @@ function trackCommandUsage(pluginName: string, command: string) {
         tags: metadata?.tags || plugin.tags || []
       };
     }
-    
+
     global.db.data.commandUsage[commandKey].count++;
     global.db.data.commandUsage[commandKey].lastUsed = Date.now();
-    
+
     const entries = Object.entries(global.db.data.commandUsage);
     if (entries.length > 100) {
       const sorted = entries.sort((a: any, b: any) => b[1].count - a[1].count);
@@ -483,6 +482,50 @@ function trackCommandUsage(pluginName: string, command: string) {
     }
   } catch (e) {
     console.error('Error tracking command usage:', e);
+  }
+}
+
+const processedCalls = new Set<string>();
+export async function onCall(calls: BaileysEventMap['call']) {
+  for (const call of calls) {
+    const { from, id, status, isGroup } = call;
+    if (isGroup || status !== 'ringing') continue;
+    if (processedCalls.has(id)) continue;
+
+    processedCalls.add(id);
+
+    setTimeout(() => processedCalls.delete(id), 1 * 60 * 1000);
+
+    let users = global.db.data.users[from]
+
+    try {
+      const rejectNode = {
+        tag: 'call',
+        attrs: {
+          from: conn.user.lid,
+          to: from,
+          id: conn.generateMessageTag()
+        },
+        content: [
+          {
+            tag: 'reject',
+            attrs: {
+              'call-id': id,
+              'call-creator': from,
+              count: '0'
+            }
+          }
+        ]
+      };
+      await conn.sendNode(rejectNode);
+
+      await new Promise(resolve => setTimeout(resolve, 500));
+      conn.reply(from, `You have been banned for calling a bot!\nContact the owner if this is a mistake: @${global.nomorown}`, null);
+      users.banned = true;
+      users.bannedReason = 'Calling Bot';
+    } catch (e) {
+      console.error('Error:', e);
+    }
   }
 }
 
@@ -621,8 +664,9 @@ export async function groupsUpdate(groupsUpdate: BaileysEventMap["groups.update"
 }
 
 global.dfail = (type: any, m: any, conn: any) => {
-  // let userss = global.db.data.users[m.sender]
+  let user = global.db.data.users[m.sender]
   let imgr = 'https://files.catbox.moe/0604mz.jpeg'
+  const bannedReason = user.bannedReason ? '```' + user.bannedReason + '```' : '```Without reason```'
   let msg = {
     rowner: '```Sorry, This Feature Is For Creators Only```',
     owner: '```Sorry, this feature is only for Owners```',
@@ -634,6 +678,7 @@ global.dfail = (type: any, m: any, conn: any) => {
     restrict: '```Restrict is turned on in this Chat, Please turn off restrict```',
     unreg: '```You are not registered yet, please register first by typing:\n.register```',
     premium: '```This feature can only be accessed by premium members!```',
+    banned: '```You cannot use this command because you have been banned! With reason: ```' + bannedReason,
   }[type];
   if (type === 'admin') {
     let stickerBuffer = fs.readFileSync('./media/admin.webp');

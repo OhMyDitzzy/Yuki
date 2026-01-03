@@ -35,7 +35,7 @@ global.commandCache = commandCache;
 global.API = (name: any, path = '/', query = {}, apikeyqueryname: any) => (name in global.APIs ? global.APIs[name] : name) + path + (query || apikeyqueryname ? '?' + new URLSearchParams(Object.entries({ ...query, ...(apikeyqueryname ? { [apikeyqueryname]: global.APIKeys[name in global.APIs ? global.APIs[name] : name] } : {}) })) : '')
 
 global.opts = new Object(yargs(process.argv.slice(2)).exitProcess(false).parse());
-global.prefix = new RegExp('^[' + (opts['prefix'] || '芒鈧絰zXZ/i!#$%+脗拢脗垄芒鈥毬偮脗掳=脗露芒藛鈥犆冣€斆兟访忊偓芒藛拧芒艙鈥溍偮┟偮�:;?&.\\-').replace(/[|\\{}()[\]^$+*?.\-\^]/g, '\\$&') + ']')
+global.prefix = new RegExp(`^[${(opts['prefix'] || "@#_\\/.!$%+£¥€°=¬‚„…†‡ˆ‰Š‹ŒŽ'':;?&\\-").replace(/[|\\{}()[\]^$+*?.\-]/g, "\\$&")}]`)
 
 global.db = new Low(new JSONFile("data/database.json"));
 global.loadDatabase = async function loadDatabase() {
@@ -111,7 +111,7 @@ cleanupManager.addCleanupHandler(async () => {
     conn.logger.info('Saving database before shutdown...');
     await global.db.write().catch(console.error);
   }
-  
+
   if (global.store) {
     conn.logger.info('Cleaning up store...');
     await global.store.cleanup();
@@ -322,7 +322,7 @@ global.reloadHandler = async function(restatConn: boolean) {
     };
 
     global.conn = makeWASocket(newConnOptions, { chats: oldChats });
-    
+
     store.bind(global.conn.ev);
     isInit = true;
   }
@@ -333,6 +333,7 @@ global.reloadHandler = async function(restatConn: boolean) {
     conn.ev.off('groups.update', conn.groupsUpdate)
     conn.ev.off('connection.update', conn.connectionUpdate)
     conn.ev.off('creds.update', conn.credsUpdate)
+    conn.ev.off('call', conn.onCall)
   }
 
   conn.handler = handler.handler.bind(global.conn)
@@ -346,12 +347,14 @@ global.reloadHandler = async function(restatConn: boolean) {
   }.bind(global.conn);
   conn.participantsUpdate = handler.participantsUpdate.bind(global.conn)
   conn.groupsUpdate = handler.groupsUpdate.bind(global.conn)
+  conn.onCall = handler.onCall.bind(global.conn);
 
   conn.ev.on('messages.upsert', conn.handler)
   conn.ev.on('connection.update', conn.connectionUpdate)
   conn.ev.on('creds.update', conn.credsUpdate)
   conn.ev.on('group-participants.update', conn.participantsUpdate)
   conn.ev.on('groups.update', conn.groupsUpdate)
+  conn.ev.on('call', conn.onCall);
 
   isInit = false;
   conn.logger.info("The handler is ready... ✓");
