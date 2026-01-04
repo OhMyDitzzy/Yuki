@@ -1326,7 +1326,10 @@ END:VCARD`.trim();
                     buttons: [{
                       name: "single_select",
                       buttonParamsJson: JSON.stringify(buttons)
-                    }]
+                    }],
+                    ...(btnOpts.messageParamsJson && {
+                      messageParamsJson: JSON.stringify(btnOpts.messageParamsJson)
+                    })
                   })
                 })
               }

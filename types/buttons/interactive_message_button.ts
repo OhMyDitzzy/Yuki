@@ -64,11 +64,33 @@ export interface ListV2 {
   sections: ListV2Sections[]
 }
 
+export interface MessageInfoLabels {
+  value?: string;
+  type?: string;
+  placement?: string;
+  source?: string;
+}
+
+export interface MessageParamsJson {
+  bottom_sheet?: {
+    in_thread_buttons_limit?: number;
+    divider_indices?: any[];  
+  };
+  limited_time_offer?: {
+    text?: string;
+    url?: string;
+    copy_code?: string;
+    expiration_time?: number;
+  };
+  info_labes?: MessageInfoLabels[];
+}
+
 export interface BtnOptsV2ListParams {
   contextInfo?: Partial<proto.IContextInfo>;
   body: Partial<proto.Message.InteractiveMessage.Body>;
   header?: Partial<proto.Message.InteractiveMessage.Header>;
   footer?: Partial<proto.Message.InteractiveMessage.Footer>;
+  messageParamsJson?: Partial<MessageParamsJson>;
 }
 
 export interface ButtonParams {

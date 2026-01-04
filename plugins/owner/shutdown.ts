@@ -1,17 +1,19 @@
 import type { PluginHandler } from "@yuki/types";
 
 let handler: PluginHandler = {
-  cmd: ["restart", "rc"],
+  cmd: ["shutdown", "stop"],
   rowner: true,
   exec: async (m, { conn }) => {
     if (!process.send) {
       return m.reply(`❌ Process not handled by cluster`);
     }
     
-    await m.reply(`Restarting WhatsApp connection... see ya!\n\nNote: The bot will remain online, only the connection will be restarted.\nEstimate: ~20 seconds`);
+    await m.reply(`🛑 Shutting down bot gracefully...\n\nGoodbye! 👋`);
+ 
+    await new Promise(resolve => setTimeout(resolve, 1000));
     
     if (global.conn.user.jid === conn!!.user.jid) {
-      process.send('restart_conn');
+      process.send('shutdown');
     }
   }
 }

@@ -12,8 +12,6 @@
 
 Yuki is a modern, high-performance WhatsApp bot built exclusively for [Bun](https://bun.sh). Designed with stability and efficiency in mind, Yuki features a plugin-based architecture, memory-efficient processing, and production-ready performance.
 
-[Features](#features) • [Installation](#installation) • [Creating Plugins](#creating-plugins) • [Performance](#performance) • [Contributing](#contributing)
-
 </div>
 
 ---

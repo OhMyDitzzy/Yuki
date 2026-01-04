@@ -52,6 +52,19 @@ function start(file: string) {
         p.kill();
         isInit = false;
         break;
+      case 'restart_conn':
+      case 'restart_connection':
+        console.log('[🔄] Forwarding restart connection command to worker...');
+        if (!p.isDead()) {
+          p.send('restart_connection');
+        }
+        break;
+      case 'shutdown':
+        console.log('[🛑] Forwarding shutdown command to worker...');
+        if (!p.isDead()) {
+          p.send('shutdown');
+        }
+        break;
       case 'uptime':
         if (!p.isDead()) {
           p.send(process.uptime());
@@ -107,6 +120,11 @@ function start(file: string) {
             currentWorker.send('force_garbage_collector');
           } else if (cmd === "shutdown") {
             currentWorker.send('shutdown');
+          } else if (cmd === "restart_conn" || cmd === "rc") {
+            currentWorker.send('restart_connection');
+            console.log('[🔄] Sending restart connection command...');
+          } else if (cmd === "conn_status" || cmd === "status" || cmd === "st") {
+            currentWorker.send('connection_status');       
           } else {
             currentWorker.emit('message', line.trim());
           }

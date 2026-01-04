@@ -17,6 +17,12 @@ export async function handler(chatUpdate: BaileysEventMap["messages.upsert"]) {
   this.pushMessage(chatUpdate.messages).catch(console.error);
   let m = chatUpdate.messages[chatUpdate.messages.length - 1] as ExtendedWAMessage;
   if (!m) return;
+  
+  // This will prevent the bot from sending commands to itself.
+  // However, It is useful to overcome every session, Bot always makes strange messages.
+  // TODO: Find another way
+  if (m.key.fromMe) return;
+  
   if (m.key.remoteJid === 'status@broadcast') return;
   if (m.isBaileys) return;
   if (global.db.data == null) await loadDatabase();

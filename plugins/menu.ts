@@ -68,31 +68,31 @@ function extractCommands(cmd: any): string[] {
 function getGlobalMostUsed(usedPrefix: string, limit = 3) {
   const commandUsage = global.db.data.commandUsage || {};
   const metadataMap = global.commandCache.getMetadata();
-  
+
   const entries = Object.values(commandUsage);
-  
+
   if (entries.length === 0) return [];
-  
+
   return entries
     .filter((stat: any) => {
       let hasValidMetadata = false;
-      
+
       for (const [pluginName, metadata] of metadataMap.entries()) {
         const plugin = global.plugins[pluginName];
         if (!plugin) continue;
-        
-        const commands = extractCommands(plugin.cmd);        
+
+        const commands = extractCommands(plugin.cmd);
         if (commands.includes(stat.command)) {
           hasValidMetadata = !!(
-            metadata.name && 
-            metadata.description && 
-            metadata.tags && 
+            metadata.name &&
+            metadata.description &&
+            metadata.tags &&
             metadata.tags.length > 0
           );
           break;
         }
       }
-      
+
       return hasValidMetadata;
     })
     .sort((a: any, b: any) => b.count - a.count)
@@ -118,13 +118,13 @@ async function showProgress(conn: any, chat: string) {
 
   for (const step of progressSteps) {
     const text = `${step.text}\n\n${step.progress} ${step.percent}\n\n_Please wait..._`;
-    
+
     if (lastMsg) {
       lastMsg = await conn.sendMessage(chat, { text, edit: lastMsg.key });
     } else {
       lastMsg = await conn.sendMessage(chat, { text });
     }
-    
+
     await new Promise(resolve => setTimeout(resolve, 250));
   }
 
@@ -147,7 +147,7 @@ let handler: PluginHandler = {
       } catch {
         packageInfo = { version: "1.0.0" };
       }
-      
+
       const registered = global.db?.data?.users?.[m.sender]?.registered || false;
       const name = registered
         ? global.db.data.users[m.sender].name
@@ -165,7 +165,7 @@ let handler: PluginHandler = {
 
       if (currentXp < 0) currentXp = 0;
       if (currentXp < 0) requiredXp = 0;
-      
+
       const rankBuffer = await new canvafy.Rank()
         .setAvatar(ppUrl)
         .setBackground("image", "https://telegra.ph/file/98225485a33fc4a5b47b2.jpg")
@@ -176,7 +176,7 @@ let handler: PluginHandler = {
         .setRequiredXp(requiredXp, "#000")
         .setRankColor({ text: "#fff", number: "#fff" } as any)
         .build();
-        
+
       const allPlugins: PluginInfo[] = [];
       for (const [pluginName, metadata] of metadataMap.entries()) {
         const plugin = global.plugins[pluginName];
@@ -204,7 +204,7 @@ let handler: PluginHandler = {
           groupedByTag[tagKey].push(plugin);
         });
       });
-      
+
       const sections: ListV2["sections"] = [];
 
       if (!text) {
@@ -225,7 +225,7 @@ let handler: PluginHandler = {
         headerText += `│ • Limit: ${user.limit}\n`;
         headerText += `╰───────────────────\n\n`;
         headerText += `💡 *Select a category below to see features!*`;
-        
+
         const mostUsed = getGlobalMostUsed(usedPrefix, 3);
         if (mostUsed.length > 0) {
           sections.push({
@@ -234,7 +234,7 @@ let handler: PluginHandler = {
             rows: mostUsed
           });
         }
-        
+
         const tagRows = Object.entries(groupedByTag).map(([tag, plugins]) => {
           const displayTag = tagDisplayNames[tag] || `${tag.charAt(0).toUpperCase() + tag.slice(1)} 📌`;
           return {
@@ -254,9 +254,9 @@ let handler: PluginHandler = {
           title: "🎯 Select Category",
           sections
         };
-        
+
         await conn?.sendMessage(m.chat, { delete: loadingMsg.key });
-        
+
         await conn?.sendListV2(
           m.chat,
           {
@@ -283,12 +283,28 @@ let handler: PluginHandler = {
             },
             footer: {
               text: `Type ${usedPrefix}menu <tag> to see features in a category`
+            },
+            messageParamsJson: {
+              bottom_sheet: {
+                in_thread_buttons_limit: 3,
+                divider_indices: []
+              },
+              limited_time_offer: {
+                text: `Click here for source code`,
+                url: global.sourceUrl
+              },
+              info_labes: [{
+                value: "Yuki Source Github",
+                type: "DISCOUNT",
+                placement: "MEDIA",
+                source: "REGEX",
+              }]
             }
           },
           list,
           { userJid: conn.user.id, quoted: payment as any }
         );
-        
+
         return;
       }
 
@@ -352,7 +368,7 @@ let handler: PluginHandler = {
         title: "🎯 Select Feature",
         sections
       };
-      
+
       await conn?.sendMessage(m.chat, { delete: loadingMsg.key });
 
       await conn?.sendListV2(

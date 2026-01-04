@@ -155,6 +155,46 @@ function getAllTsFiles(dirPath: string, arrayOfFiles: string[] = []) {
   return arrayOfFiles;
 }
 
+let isShuttingDown = false;
+let connectionRestartTimer: NodeJS.Timeout | null = null;
+let lastRestartTime = Date.now();
+let isRestartingConnection = false;
+
+function getConnectionState() {
+  try {
+    if (!global.conn?.ws?.socket) {
+      return { state: -1, stateText: 'NO_SOCKET', isConnected: false };
+    }
+
+    const readyState = global.conn.ws.socket.readyState;
+    
+    let stateText = 'UNKNOWN';
+    let isConnected = false;
+    
+    switch(readyState) {
+      case 0: 
+        stateText = 'CONNECTING'; 
+        break;
+      case 1: 
+        stateText = 'OPEN'; 
+        isConnected = true; 
+        break;
+      case 2: 
+        stateText = 'CLOSING'; 
+        break;
+      case 3: 
+        stateText = 'CLOSED'; 
+        break;
+      default: 
+        stateText = `UNKNOWN(${readyState})`;
+    }
+    
+    return { state: readyState, stateText, isConnected };
+  } catch (e) {
+    return { state: -1, stateText: 'ERROR', isConnected: false };
+  }
+}
+
 async function connectionUpdate(update: any) {
   const { receivedPendingNotifications, connection, lastDisconnect, isOnline, isNewLogin } = update;
 
@@ -166,6 +206,12 @@ async function connectionUpdate(update: any) {
     conn.logger.warn('Activating Bot, Please wait a moment...');
   } else if (connection == 'open') {
     conn.logger.info('Connected... ✓');
+ 
+    if (isRestartingConnection) {
+      conn.logger.info('✓ Scheduled/manual restart successful');
+      isRestartingConnection = false;
+      lastRestartTime = Date.now();
+    }
   }
 
   if (isOnline == true) {
@@ -181,6 +227,11 @@ async function connectionUpdate(update: any) {
   if (connection == 'close') {
     if (conn.isShuttingDown) {
       conn.logger.info('Connection closed gracefully');
+      return;
+    }
+
+    if (isRestartingConnection) {
+      conn.logger.info('🔄 Connection closed by restart process, skipping auto-reconnect');
       return;
     }
 
@@ -704,16 +755,12 @@ function setupTmpCleanup() {
 async function initialize() {
   try {
     await global.loadDatabase();
-
     await loadAllPlugins();
-
     commandCache.build(global.plugins);
-
     await _quickTest();
-
     await global.reloadHandler();
-
     memoryMonitor.start(60000);
+    scheduleConnectionRestart();
 
     if (!opts["test"]) {
       const dbSaveInterval = setInterval(async () => {
@@ -754,7 +801,151 @@ async function initialize() {
 
 initialize();
 
-let isShuttingDown = false;
+async function restartWhatsAppConnection() {
+  if (isShuttingDown) {
+    conn.logger.warn('Cannot restart during shutdown');
+    return;
+  }
+
+  if (isRestartingConnection) {
+    conn.logger.warn('⚠️ Restart already in progress, skipping...');
+    return;
+  }
+
+  isRestartingConnection = true;
+  conn.logger.info('🔄 Starting connection restart...');
+  
+  try {
+    if (saveCredsFunction && authState?.creds) {
+      await saveCredsFunction();
+      conn.logger.info('✓ Credentials saved');
+    }
+    
+    if (global.db?.data) {
+      await global.db.write();
+      conn.logger.info('✓ Database saved');
+    }
+
+    conn.logger.info('⏳ Waiting 3s for pending operations...');
+    await new Promise(resolve => setTimeout(resolve, 3000));
+
+    conn.logger.info('🔌 Closing old connection...');
+    const oldConn = global.conn;
+  
+    if (oldConn?.ev) {
+      oldConn.ev.removeAllListeners();
+      conn.logger.info('✓ Event listeners removed');
+    }
+
+    if (oldConn?.ws?.socket) {
+      try {
+        const currentState = oldConn.ws.socket.readyState;
+        conn.logger.info(`Current socket state: ${currentState}`);
+        
+        if (currentState === 0 || currentState === 1) {
+          oldConn.ws.socket.close();
+          conn.logger.info('Socket close initiated');
+        }
+
+        let waitCount = 0;
+        while (oldConn.ws?.socket && oldConn.ws.socket.readyState !== 3 && waitCount < 50) {
+          await new Promise(resolve => setTimeout(resolve, 100));
+          waitCount++;
+        }
+        
+        if (oldConn.ws?.socket?.readyState === 3) {
+          conn.logger.info('✓ Socket closed successfully');
+        } else {
+          conn.logger.warn('⚠️ Socket close timeout, proceeding anyway');
+        }
+      } catch (e) {
+        conn.logger.error('Error closing socket:', e);
+      }
+    }
+
+    conn.logger.info('Waiting 3s for server to detect disconnect...');
+    await new Promise(resolve => setTimeout(resolve, 3000));
+    conn.logger.info('Creating new connection...');
+    await global.reloadHandler(true);
+    conn.logger.info('Waiting for new connection to stabilize...');
+    
+    let attempts = 0;
+    let connected = false;
+    
+    while (!connected && attempts < 15) {
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
+      const connState = getConnectionState();
+      conn.logger.info(`Attempt ${attempts + 1}/15: ${connState.stateText}`);
+      
+      if (connState.isConnected) {
+        connected = true;
+        conn.logger.info('✓ Connection verified as OPEN');
+        break;
+      }
+      
+      attempts++;
+    }
+    
+    if (!connected) {
+      throw new Error('Connection did not stabilize after 15 attempts');
+    }
+    
+    conn.logger.info('✅ Connection restart completed successfully');
+    
+  } catch (error) {
+    conn.logger.error('❌ Failed to restart connection:', error);
+    isRestartingConnection = false;
+    
+    conn.logger.warn('⏰ Will retry in 5 minutes...');
+    scheduleConnectionRestart(5 * 60 * 1000);
+  }
+}
+
+function scheduleConnectionRestart(intervalMs: number = 16 * 60 * 60 * 1000) {
+  if (connectionRestartTimer) {
+    clearTimeout(connectionRestartTimer);
+  }
+
+  connectionRestartTimer = setTimeout(async () => {
+    const now = new Date();
+    const wibTime = new Date(now.getTime() + (7 * 60 * 60 * 1000));
+    const currentHour = wibTime.getUTCHours();
+    if (currentHour >= 8 && currentHour < 22) {
+      const next3AMWIB = new Date(wibTime);
+      next3AMWIB.setUTCHours(3, 0, 0, 0);
+ 
+      if (next3AMWIB.getTime() <= wibTime.getTime()) {
+        next3AMWIB.setUTCDate(next3AMWIB.getUTCDate() + 1);
+      }
+      
+      const delayMs = next3AMWIB.getTime() - wibTime.getTime();
+      
+      conn.logger.info(
+        `Restart postponed to 3 AM WIB (${Math.round(delayMs / 60000)} minutes)`
+      );
+      
+      scheduleConnectionRestart(delayMs);
+      return;
+    }
+    await restartWhatsAppConnection();
+
+    scheduleConnectionRestart(16 * 60 * 60 * 1000);
+  }, intervalMs);
+
+  cleanupManager.addCleanupHandler(() => {
+    if (connectionRestartTimer) {
+      clearTimeout(connectionRestartTimer);
+      connectionRestartTimer = null;
+    }
+  });
+
+  const nextRestartUTC = new Date(Date.now() + intervalMs);
+  const nextRestartWIB = new Date(nextRestartUTC.getTime() + (7 * 60 * 60 * 1000));
+  const wibString = nextRestartWIB.toISOString().replace('T', ' ').substring(0, 19) + ' WIB';
+  
+  conn.logger.info(`Next scheduled restart: ${wibString}`);
+}
 
 async function gracefulShutdown(signal: string) {
   if (isShuttingDown) {
@@ -843,10 +1034,44 @@ process.on('message', async (msg) => {
   if (msg === 'shutdown') {
     await gracefulShutdown('PM2_SHUTDOWN');
   }
+  
   if (msg === "get_memory_stats") {
     memoryMonitor.displayMemoryTable();
   }
+  
   if (msg === "force_garbage_collector") {
     memoryMonitor.forceGC();
+  }
+  
+  if (msg === 'restart_connection') {
+    conn.logger.info('📨 Manual restart command received');
+    await restartWhatsAppConnection();
+  }
+  
+  if (msg === 'connection_status') {
+    const uptime = Date.now() - lastRestartTime;
+    const uptimeHours = Math.floor(uptime / (1000 * 60 * 60));
+    const uptimeMinutes = Math.floor((uptime % (1000 * 60 * 60)) / (1000 * 60));
+    
+    const connState = getConnectionState();
+    
+    const lastRestartWIB = new Date(lastRestartTime + (7 * 60 * 60 * 1000));
+    const wibString = lastRestartWIB.toISOString().replace('T', ' ').substring(0, 19) + ' WIB';
+    
+    const status = {
+      wsState: connState.stateText,
+      readyStateCode: connState.state,
+      isConnected: connState.isConnected,
+      isRestarting: isRestartingConnection,
+      lastRestart: wibString,
+      uptimeSinceRestart: `${uptimeHours}h ${uptimeMinutes}m`,
+      isShuttingDown,
+      hasConnection: !!global.conn,
+      hasWebSocket: !!global.conn?.ws,
+      hasActualSocket: !!global.conn?.ws?.socket,
+      hasEventEmitter: !!global.conn?.ev
+    };
+    
+    conn.logger.info('📊 Connection Status:', JSON.stringify(status, null, 2));
   }
 });
