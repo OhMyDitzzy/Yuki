@@ -11,7 +11,6 @@
 <img src="https://img.shields.io/static/v1?label=speed&message=super+fast&color=success" alt="Yuki Speed" />
 
 Yuki is a modern, high-performance WhatsApp bot built exclusively for [Bun](https://bun.sh). Designed with stability and efficiency in mind, Yuki features a plugin-based architecture, memory-efficient processing, and production-ready performance.
-
 </div>
 
 ---
@@ -96,26 +95,6 @@ You'll receive a **pairing code** in the terminal. Enter this code in your Whats
 
 Yuki uses a plugin-based system where all commands are automatically detected in the `plugins/` folder.
 
-### Basic Plugin Structure
-
-Create a new file in the `plugins/` folder:
-
-**plugins/hello.ts**
-```typescript
-import type { PluginHandler } from "@yuki/types";
-
-const handler: PluginHandler = {
-  name: "Say Hello",
-  cmd: ["hello", "hi"], // Commands that trigger this plugin
-  tags: ["general"],
-  description: "Greet the user",  
-  exec: async (m) => {
-    await m.reply("Hello! 👋");
-  }
-}
-
-export default handler;
-```
 > [!NOTE]
 > Plugin examples and documentation are available in the folder [example-plugins](example-plugins). 
 
