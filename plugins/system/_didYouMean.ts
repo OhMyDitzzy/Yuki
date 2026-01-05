@@ -10,7 +10,7 @@ export async function before(m: ExtendedWAMessage, { match }: { match: string[] 
     let text = args.join(` `);
     let command = noPrefix.trim().split(` `)[0].toLowerCase();
 
-    let allCommands = Object.values(global.plugins)
+    let publicCommands = Object.values(global.plugins)
       .filter((v: any) => 
         v.cmd && 
         v.name && 
@@ -20,14 +20,29 @@ export async function before(m: ExtendedWAMessage, { match }: { match: string[] 
       )
       .flatMap((v: any) => v.cmd);
 
-    if (allCommands.includes(command)) return;
-    let mean = didYouMean(command, allCommands);
+    let privateCommands = Object.values(global.plugins)
+      .filter((v: any) => 
+        v.cmd && 
+        (!v.name || !v.description || !v.tags) && 
+        !v.disabled
+      )
+      .flatMap((v: any) => v.cmd);
+
+    if (publicCommands.includes(command) || privateCommands.includes(command)) {
+      return;
+    }
+
+    let isNearPrivate = didYouMean(command, privateCommands);
+
+    if (isNearPrivate) return;
+
+    let mean = didYouMean(command, publicCommands);
     
     if (mean) {
       this.sendMessage(
         m.chat,
         {
-          text: `Command with *${m.text}* not found\nDid you mean: *${usedPrefix + mean}*?`,
+          text: `Command *${usedPrefix + command}* not found\nDid you mean: *${usedPrefix + mean}*?`,
           buttons: [{
             buttonId: `${usedPrefix + mean} ${text}`,
             buttonText: {
