@@ -39,16 +39,12 @@ let handler: PluginHandler = {
       _return = await exec.call(conn, (...args: any[]) => {
         if (--i < 1) return
         console.log(...args)
-        return conn!!.reply(m.chat, format(...args), m)
+        return conn!!.sendMessage(m.chat, { text: format(...args) }, { quoted: m })
       }, m, handler, require, conn, CustomArray, process, args, groupMetadata, f, f.exports, [conn, conn, usedPrefix, noPrefix, args, groupMetadata])
     } catch (e: any) {
       _return = e
     } finally {
-      conn!!.reply(
-        m.chat,
-        (_syntax || '') + format(_return),
-        m
-      )
+      conn!!.sendMessage(m.chat, { text: (_syntax || '') + format(_return) }, { quoted: m })
       m.exp = old
     }
   }

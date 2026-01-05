@@ -8,19 +8,19 @@ const handler: PluginHandler = {
     if (!isOwner) return
     if (conn!!.user.jid !== conn!!.user.jid) return
 
-    await m.reply("Executing...")
+    let { key } = await m.reply("Executing...")
 
     try {
       const result = await Bun.$`${command} ${text}`.quiet()
 
       if (result.stdout.toString().trim())
-        await m.reply(result.stdout.toString())
+        await conn!!.sendMessage(m.chat, { text: result.stdout.toString(), edit: key }, { quoted: m })
 
       if (result.stderr.toString().trim())
-        await m.reply(result.stderr.toString())
+        await conn!!.sendMessage(m.chat, { text: result.stderr.toString(), edit: key }, { quoted: m })
 
     } catch (err: any) {
-      await m.reply(String(err.stderr || err.message || err))
+      await conn!!.sendMessage(m.chat, { text: String(err.stderr || err.message || err), edit: key }, { quoted: m })
     }
   }
 }

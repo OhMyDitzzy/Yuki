@@ -136,7 +136,6 @@ let handler: PluginHandler = {
   description: "Show menu list",
   cmd: ["menu", "help"],
   tags: ["public"],
-  register: true,
   exec: async (m, { conn, text, usedPrefix }) => {
     try {
       const loadingMsg = await showProgress(conn!!, m.chat);
@@ -151,7 +150,7 @@ let handler: PluginHandler = {
       const registered = global.db?.data?.users?.[m.sender]?.registered || false;
       const name = registered
         ? global.db.data.users[m.sender].name
-        : conn?.getName(m.sender) || "User";
+        : await conn?.getName(m.sender) || "User";
 
       let payment = { "key": { "remoteJid": "0@s.whatsapp.net", "fromMe": false }, "message": { "requestPaymentMessage": { "currencyCodeIso4217": "USD", "amount1000": "99999999999", "requestFrom": "0@s.whatsapp.net", "noteMessage": { "extendedTextMessage": { "text": `${name}-san 🐼`, "contextInfo": { "mentionedJid": [`${m.sender}`] } } }, "expiryTimestamp": "0", "amount": { "value": "99999999999", "offset": 1000, "currencyCode": "USD" } } } }
 
@@ -263,7 +262,11 @@ let handler: PluginHandler = {
             contextInfo: {
               mentionedJid: [m.sender],
               isForwarded: true,
-              forwardingScore: 99999999,
+              forwardedNewsletterMessageInfo: {
+                newsletterJid: '120363422234459295@newsletter',
+	    		newsletterName: `Yuki Botz v${packageInfo.version}`, 
+		     	serverMessageId: -1
+              },
               externalAdReply: {
                 title: "Yuki Botz",
                 body: packageInfo.version,

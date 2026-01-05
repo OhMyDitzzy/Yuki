@@ -196,8 +196,8 @@ function getConnectionState() {
 }
 
 async function connectionUpdate(update: any) {
-  const { receivedPendingNotifications, connection, lastDisconnect, isOnline, isNewLogin } = update;
-
+  const { receivedPendingNotifications, connection, lastDisconnect, isOnline, isNewLogin } = update;    
+  
   if (isNewLogin) {
     conn.isInit = true;
   }
@@ -205,8 +205,8 @@ async function connectionUpdate(update: any) {
   if (connection == 'connecting') {
     conn.logger.warn('Activating Bot, Please wait a moment...');
   } else if (connection == 'open') {
-    conn.logger.info('Connected... ✓');
- 
+    conn.logger.info('Connected... ✓');     
+     
     if (isRestartingConnection) {
       conn.logger.info('✓ Scheduled/manual restart successful');
       isRestartingConnection = false;
@@ -436,7 +436,7 @@ function hashContent(content: string): string {
 let pluginFolder = path.join(__dirname, "plugins");
 let pluginFilter = (filename: string) => /\.ts$/.test(filename);
 
-global.reload = async (filename: string = "") => {
+global.reload = async (filename: string = "") => {  
   if (!pluginFilter(filename)) return;
 
   if (filename.includes('_utils')) return;
@@ -497,7 +497,10 @@ global.reload = async (filename: string = "") => {
 
     const moduleExports: any = {};
     const moduleObj = { exports: moduleExports };
-
+    
+    const Module = require('module');
+    const customRequire = Module.createRequire(fullPath);
+  
     const moduleFactory = new Function(
       'require',
       'exports',
@@ -508,7 +511,7 @@ global.reload = async (filename: string = "") => {
     );
 
     moduleFactory(
-      require,
+      customRequire,
       moduleExports,
       moduleObj,
       fullPath,
