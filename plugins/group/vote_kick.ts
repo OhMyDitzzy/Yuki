@@ -147,7 +147,7 @@ let handler: PluginHandler = {
 
     const sentPoll = await sock.sendPoll(
       m.chat,
-      `*VOTE KICK MEMBER ${names || 'A USER'}*\n\nVote to kick this member from the group.\n\n✅ Required Yes votes: ${yesTarget}\n❌ Required No votes to cancel: ${noTarget}`,
+      `*VOTE KICK MEMBER ${names || ''}*\n\nVote to kick this member from the group.\n\n✅ Required Yes votes: ${yesTarget}\n❌ Required No votes to cancel: ${noTarget}`,
       pollOptions as any,
       {
         multiselect: false,
