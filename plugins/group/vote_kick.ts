@@ -13,7 +13,7 @@ let handler: PluginHandler = {
 
     sock.votekick = sock.votekick || {};
 
-    if (args.length >= 2) {
+    if (args.length >= 2 && !args[0].includes('|')) {
       const targetUser = args[0];
       const action = args[1];
 
@@ -26,17 +26,17 @@ let handler: PluginHandler = {
       }
 
       const voteData = sock.votekick[votekickTarget];
-      const hasVoted = voteData.voters.includes(m.sender);
+      const hasVoted = voteData.voters.some((v: any) => v.jid === m.sender);
 
       if (action === "yes") {
         if (hasVoted) {
           return;
         }
 
-        voteData.vote += 1;
-        voteData.voters.push(m.sender);
+        voteData.yesVotes += 1;
+        voteData.voters.push({ jid: m.sender, vote: 'yes' });
 
-        if (voteData.vote >= 5) {
+        if (voteData.yesVotes >= voteData.yesTarget) {
           try {
             await sock.groupParticipantsUpdate(
               voteData.groupId,
@@ -45,7 +45,7 @@ let handler: PluginHandler = {
             );
 
             await sock.sendMessage(voteData.groupId, {
-              text: `*VOTE KICK COMPLETED*\n@${votekickTarget.split("@")[0]} has been kicked from the group.\n\n✅ Total votes: ${voteData.vote}`,
+              text: `*✅ VOTE KICK COMPLETED*\n@${votekickTarget.split("@")[0]} has been kicked from the group.\n\n✅ Yes votes: ${voteData.yesVotes}/${voteData.yesTarget}\n❌ No votes: ${voteData.noVotes}/${voteData.noTarget}`,
               contextInfo: {
                 mentionedJid: [votekickTarget]
               }
@@ -64,34 +64,61 @@ let handler: PluginHandler = {
         }
       } else if (action === "no") {
         if (hasVoted) {
-          voteData.vote -= 1;
-          const voterIndex = voteData.voters.indexOf(m.sender);
-          voteData.voters.splice(voterIndex, 1);
+          return;
         }
-        return;
+
+        voteData.noVotes += 1;
+        voteData.voters.push({ jid: m.sender, vote: 'no' });
+
+        if (voteData.noVotes >= voteData.noTarget) {
+          await sock.sendMessage(voteData.groupId, {
+            text: `*❌ VOTE KICK CANCELLED*\nVote to kick @${votekickTarget.split("@")[0]} has been cancelled.\n\n✅ Yes votes: ${voteData.yesVotes}/${voteData.yesTarget}\n❌ No votes: ${voteData.noVotes}/${voteData.noTarget}`,
+            contextInfo: {
+              mentionedJid: [votekickTarget]
+            }
+          });
+
+          delete sock.votekick[votekickTarget];
+        }
       }
 
       return;
     }
 
     let who = (m.mentionedJid[0] || (m.quoted ? m.quoted.sender : undefined));
+    let yesTarget = 5;
+    let noTarget = 3;
 
-    if (!who) throw `*Example:* ${usedPrefix + command!!} @target`;
+    if (args.length > 0 && args[0].includes('|')) {
+      const targets = args[0].split('|');
+      yesTarget = Math.max(2, parseInt(targets[0]) || 5);
+      noTarget = Math.max(2, parseInt(targets[1]) || 3);
+    } else if (args.length > 1 && args[1].includes('|')) {
+      // User mentioned someone, vote targets are in second arg
+      const targets = args[1].split('|');
+      yesTarget = Math.max(2, parseInt(targets[0]) || 5);
+      noTarget = Math.max(2, parseInt(targets[1]) || 3);
+    }
 
-    const { targetROwner, targetAdmin, targetRAdmin } = await checkTarget!!(who);
+    if (!who) throw `*Example:*\n${usedPrefix + command!!} @target 10|5\n${usedPrefix + command!!} 10|5 (reply to message)\n\n*Note:* Minimum vote target is 2`;
 
-    if (targetAdmin || targetROwner || targetRAdmin)
-      return m.reply("*Can't redirect to Admin, Owner, or Bot!*");
+    const { targetROwner, targetRAdmin } = await checkTarget!!(who);
+
+    if (targetROwner || targetRAdmin)
+      return m.reply("*Can't target Admin, Owner, or Bot!*");
 
     const activeVoteInGroup = Object.keys(sock.votekick).find(target => {
       return sock.votekick[target].groupId === m.chat;
     });
 
     if (activeVoteInGroup && activeVoteInGroup !== who) {
+      const activeVote = sock.votekick[activeVoteInGroup];
       return await sock.sendMessage(m.chat, {
         text: `*There is already an active vote in this group!*\n` +
           `Target: @${activeVoteInGroup.split("@")[0]}\n` +
-          `Progress: (${sock.votekick[activeVoteInGroup].vote}/5)\n\n` +
+          `Progress:\n` +
+          `✅ Yes: ${activeVote.yesVotes}/${activeVote.yesTarget}\n` +
+          `❌ No: ${activeVote.noVotes}/${activeVote.noTarget}\n\n` +
           `Please complete or cancel the current vote first.`,
         contextInfo: {
           mentionedJid: [activeVoteInGroup]
@@ -101,7 +128,10 @@ let handler: PluginHandler = {
 
     if (!sock.votekick[who]) {
       sock.votekick[who] = {
-        vote: 0,
+        yesVotes: 0,
+        noVotes: 0,
+        yesTarget: yesTarget,
+        noTarget: noTarget,
         voters: [],
         groupId: m.chat,
         pollMsgId: null
@@ -117,7 +147,7 @@ let handler: PluginHandler = {
 
     const sentPoll = await sock.sendPoll(
       m.chat,
-      `*VOTE KICK MEMBER ${names || 'A USER'}*\n\nVote to kick this member from the group.\nRequired: 5 votes`,
+      `*VOTE KICK MEMBER ${names || 'A USER'}*\n\nVote to kick this member from the group.\n\n✅ Required Yes votes: ${yesTarget}\n❌ Required No votes to cancel: ${noTarget}`,
       pollOptions as any,
       {
         multiselect: false,
@@ -156,14 +186,18 @@ let handler: PluginHandler = {
     if (!target) return false;
 
     const voteData = votekicks[target];
-    const hasVoted = voteData.voters.includes(m.sender);
+    const voter = voteData.voters.find((v: any) => v.jid === m.sender);
 
-    if (m.text === "unvote") {
-      if (!hasVoted) return false
-      voteData.vote -= 1;
-      const voterIndex = voteData.voters.indexOf(m.sender);
-      voteData.voters.splice(voterIndex, 1);
+    if (!voter) return false;
+
+    if (voter.vote === 'yes') {
+      voteData.yesVotes -= 1;
+    } else if (voter.vote === 'no') {
+      voteData.noVotes -= 1;
     }
+
+    const voterIndex = voteData.voters.findIndex((v: any) => v.jid === m.sender);
+    voteData.voters.splice(voterIndex, 1);
 
     return true;
   }
