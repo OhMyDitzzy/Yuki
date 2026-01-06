@@ -18,7 +18,7 @@ export async function handler(chatUpdate: BaileysEventMap["messages.upsert"]) {
   let m = chatUpdate.messages[chatUpdate.messages.length - 1] as ExtendedWAMessage;
   if (!m) return;
   
-  // Bot always makes strange messages.
+  // Bot always makes strange messages during session.
   // TODO: Find another way
   
   if (m.key.remoteJid === 'status@broadcast') return;
