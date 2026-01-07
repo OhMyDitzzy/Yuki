@@ -14,6 +14,7 @@ export function initializeUser(user: any, sender: string, m: any): void {
     if (!isNumber(user.exp)) user.exp = 0;
     if (!isNumber(user.limit)) user.limit = 100;
     if (!isNumber(user.level)) user.level = 1;
+    if (!isNumber(user.money)) user.money = 0;
     if (!('registered' in user)) user.registered = false;
     if (!user.registered) {
       if (!('name' in user)) user.name = m.name;
@@ -33,7 +34,8 @@ export function initializeUser(user: any, sender: string, m: any): void {
     if (!('role' in user)) user.role = 'Beginner';
     if (!('moderator' in user)) user.moderator = false;
     if (!('staffRole' in user)) user.staffRole = null;
-
+    if (!isNumber(user.gold)) user.gold = 0;
+    if (!isNumber(user.diamond)) user.diamond = 0
     if (!isNumber(user.prestige)) user.prestige = 0;
   } else global.db.data.users[sender] = {
     exp: 0,
@@ -41,6 +43,7 @@ export function initializeUser(user: any, sender: string, m: any): void {
     level: 1,
     registered: false,
     name: m.name,
+    money: 10000,
     age: -1,
     regTime: -1,
     afk: -1,
@@ -56,6 +59,8 @@ export function initializeUser(user: any, sender: string, m: any): void {
     moderator: false,
     staffRole: null,
     prestige: 0,
+    gold: 0,
+    diamond: 0,
   }
 }
 

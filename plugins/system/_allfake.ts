@@ -16,10 +16,35 @@ handler.all = async function(m: any) {
   } catch {
     global.packageInfo = { version: "1.0.0" };
   }
+
+  global.styles = (text: string) => styles(text);
 }
 
 export default handler;
 
 function pickRandom(list: string[]) {
   return list[Math.floor(list.length * Math.random())];
+}
+
+function styles(text: string, style = 1) {
+  var xStr = "abcdefghijklmnopqrstuvwxyz1234567890".split("");
+  var yStr = Object.freeze({
+    1: "ᴀʙᴄᴅᴇꜰɢʜɪᴊᴋʟᴍɴᴏᴘqʀsᴛᴜᴠᴡxʏᴢ1234567890",
+  });
+
+  var replacer = [];
+  xStr.map((v, i) => replacer.push({
+    original: v,
+    convert: yStr[style].split('')[i]
+  }));
+
+  var str = text.toLowerCase().split('');
+  var output = [];
+
+  str.map(v => {
+    const find = replacer.find(x => x.original == v);
+    find ? output.push(find.convert) : output.push(v);
+  });
+
+  return output.join('');
 }
