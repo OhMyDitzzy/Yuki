@@ -1,5 +1,4 @@
 import type { PluginHandler } from "@yuki/types";
-import { generateWAMessageFromContent, proto } from "baileys"
 
 let handler: PluginHandler = {
   name: "Vote Kick",
@@ -156,21 +155,8 @@ let handler: PluginHandler = {
         quoted: m
       }
     );
-
-    let templategenerate = generateWAMessageFromContent(m.chat, proto.Message.fromObject({
-      pinInChatMessage: {
-        key: sentPoll.key,
-        type: 1,
-        senderTimestampMs: new Date().getTime() / 1000
-      }
-    }), {} as any)
-
-    let templatenew = {
-      messageContextInfo: { messageAddOnDurationInSecs: 604800 },
-      ...templategenerate.message
-    }
-
-    await sock.relayMessage(m.chat, templatenew, { messageId: templategenerate.key.id })
+    
+    await conn!!.sendMessage(m.chat, { pin: sentPoll.key, type: 1, time: 24 * 60 * 60 });
 
     sock.votekick[who].pollMsgId = sentPoll.key.id;
   },

@@ -32,7 +32,7 @@ let handler: PluginHandler = {
     let exif: any;
     if (text) {
       const [packname, author] = text.split(/[,|\-+&]/);
-      exif = { packName: packname?.trim() || '', packPublish: author?.trim() || '' };
+      exif = { packName: packname?.trim() || 'Yuki-Botz', packPublish: author?.trim() || 'DitzDev' };
     }
     
     m.react("✅");

@@ -28,21 +28,13 @@ let handler: PluginHandler = {
     const inputPath = join(tmpdir(), `input_${tempId}.mp4`);
     const outputPath = join(tmpdir(), `output_${tempId}.mp4`);
 
-    conn!!.compressvideo = conn!!.compressvideo || {};
-
-    if (conn!!.compressvideo[m.sender]) {
-      return m.reply("*You've just compressed your video! Wait for the process to complete.*");
-    }
-
-    if (Object.keys(conn!!.compressvideo[m.sender]).length > 0) {
-      return m.reply("*This command is currently in use by another user! Please wait for the process to complete.*")
-    }
+    conn!!.compressvideo = conn!!.compressvideo || {};    
 
     conn!!.compressvideo[m.sender] = {
       startTime: Date.now(),
       chatId: m.chat
-    }
-
+    }    
+    
     try {
       m.reply("📥 Downloading video...");
       let media = await m.quoted.download();

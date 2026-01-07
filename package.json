@@ -33,6 +33,7 @@
     "pino": "^10.1.0",
     "sharp": "^0.34.3",
     "url-regex-safe": "^4.0.0",
+    "uuid": "^13.0.0",
     "yargs": "^18.0.0"
   },
   "trustedDependencies": [

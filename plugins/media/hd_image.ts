@@ -1,40 +1,62 @@
 import type { PluginHandler } from "@yuki/types";
-import axios from "axios";
-import { uploader } from "libs/uploadImage";
+import axios, { AxiosResponse } from "axios";
 
-async function pollTaskStatus(taskUrl: string, maxAttempts = 30, interval = 2000): Promise<string> {
-  for (let attempt = 0; attempt < maxAttempts; attempt++) {
-    try {
-      const response = await axios.get(taskUrl);
-      const data = response.data;
+type EnhanceSize = "low" | "medium" | "high";
 
-      if (data.ok && data.status === "done" && data.url) {
-        return data.url;
-      }
+interface IhancerOptions {
+  method?: 1 | 2 | 3 | 4;
+  size?: EnhanceSize;
+}
 
-      if (data.status === "failed" || data.status === "error") {
-        throw new Error("Task processing failed");
-      }
+async function ihancer(
+  buffer: Buffer,
+  { method = 1, size = "low" }: IhancerOptions = {}
+): Promise<Buffer> {
+  const { default: FormData } = await import("form-data");
 
-      if (data.status === "pending") {
-        await new Promise(resolve => setTimeout(resolve, interval));
-        continue;
-      }
+  const availableSizes: EnhanceSize[] = ["low", "medium", "high"];
 
-      throw new Error(`Unknown status: ${data.status}`);
-    } catch (error) {
-      if (!axios.isAxiosError(error)) {
-        throw error;
-      }
-      if (attempt < maxAttempts - 1) {
-        await new Promise(resolve => setTimeout(resolve, interval));
-        continue;
-      }
-      throw new Error("Max polling attempts reached");
-    }
+  if (!buffer || !Buffer.isBuffer(buffer)) {
+    throw new Error("Image buffer is required");
   }
-  
-  throw new Error("Task timeout - max attempts reached");
+
+  if (method < 1 || method > 4) {
+    throw new Error("Available methods: 1, 2, 3, 4");
+  }
+
+  if (!availableSizes.includes(size)) {
+    throw new Error(`Available sizes: ${availableSizes.join(", ")}`);
+  }
+
+  const form = new FormData();
+  form.append("method", method.toString());
+  form.append("is_pro_version", "false");
+  form.append("is_enhancing_more", "false");
+  form.append("max_image_size", size);
+  form.append("file", buffer, `${Date.now()}.jpg`);
+
+  try {
+    const response: AxiosResponse<ArrayBuffer> = await axios.post(
+      "https://ihancer.com/api/enhance",
+      form,
+      {
+        headers: {
+          ...form.getHeaders(),
+          "accept-encoding": "gzip",
+          host: "ihancer.com",
+          "user-agent": "Dart/3.5 (dart:io)",
+        },
+        responseType: "arraybuffer",
+      }
+    );
+
+    return Buffer.from(response.data);
+  } catch (err: unknown) {
+    if (err instanceof Error) {
+      throw new Error(err.message);
+    }
+    throw new Error("Unknown error occurred");
+  }
 }
 
 let handler: PluginHandler = {
@@ -45,66 +67,29 @@ let handler: PluginHandler = {
   limit: 2,
   register: true,
   cmd: ["hdr", "remini", "hd"],
-  exec: async (m, { conn, command, usedPrefix }) => {
-    conn!!.enhancer = conn!!.enhancer ? conn!!.enhancer : {};
-    if (m.sender in conn!!.enhancer) 
-      return conn!!.reply(m.chat, "❌ Your process is not yet complete, please wait until the process is complete.", m);
-      
-    if (Object.keys(conn!!.enhancer).length > 0) {
-      return conn!!.reply(m.chat, "⚠️ *Another user has already used this feature, please wait until the process is complete!*", m)
-    }
-
+  exec: async (m, { conn, usedPrefix, command }) => {
     let q = m.quoted ? m.quoted : m;
-    let mime = (q.msg || q).mimetype || q.mediaType || "";
+    const mime = (q.msg || q).mimetype || '';
 
-    if (!mime) 
+    if (!mime)
       return conn!!.reply(m.chat, `Send/Reply Images with the caption *${usedPrefix + command!!}*`, m);
 
     if (!/image\/(jpe?g|png)/.test(mime))
       return conn!!.reply(m.chat, `Mime ${mime} is not supported`, m);
-    
-    conn!!.enhancer[m.sender] = true;
-    m.react("⏳");
-
-    let img = await q.download?.();
-    let error: any;
-
-    try {
-      let imgUrl = await uploader(img);
       
-      let api = await axios.get(
-        `${global.APIs.PaxSenix}/ai-tools/ihancer?url=${encodeURIComponent(imgUrl.url!)}&method=1&size=high`, 
-        { headers: { Authorization: global.APIKeys.PaxSenixAPIKey } }
-      );
-
-      if (api.data.ok && api.data.url) {
-        m.react("✅");
-        conn!!.sendFile(m.chat, api.data.url, "hd.jpg", "", m);
-      } else if (api.data.task_url || typeof api.data === 'string') {
-        const taskUrl = api.data.task_url || api.data;
- 
-        m.react("🔄");
-
-        const resultUrl = await pollTaskStatus(taskUrl, 60, 2000);
-        
-        m.react("✅");
-        conn!!.sendFile(m.chat, resultUrl, "hd.jpg", "", m);
-      } else {
-        throw new Error("Unexpected API response format");
-      }
+    m.react("⏳")
+    try {
+      const img = await q.download();
+      const resp = await ihancer(img, { method: 1, size: "high" });
+      
+      await conn!!.sendFile(m.chat, resp, "hd.jpg", "", m);
+      m.react("✅")
     } catch (e) {
-      error = e;
-      console.error("Enhancement error:", e);
-    } finally {
-      if (error) {
-        m.react("❌");
-        delete conn!!.enhancer[m.sender];
-        const errorMsg = error instanceof Error ? error.message : "Process Failed...";
-        conn!!.error(m, error)       
-      }
-      delete conn!!.enhancer[m.sender];
+      m.react("❌")
+      conn.error(m, e);
+      console.error(e)
     }
   }
-}
+};
 
 export default handler;
