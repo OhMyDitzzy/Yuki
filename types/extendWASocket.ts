@@ -60,9 +60,9 @@ export interface ExtendedWASocket extends WASocket {
 
   sendListV2(
     jid: string,
-    btnOpts: BtnOptsV2ListParams,
-    buttons: ListV2,
-    quoted: MessageGenerationOptionsFromContent,
+    btnOpts?: BtnOptsV2ListParams,
+    buttons?: ListV2,
+    quoted?: MessageGenerationOptionsFromContent,
   ): Promise<ExtendedWAMessage>;
 
   sendButtonV2(

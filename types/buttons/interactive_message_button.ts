@@ -87,7 +87,7 @@ export interface MessageParamsJson {
 
 export interface BtnOptsV2ListParams {
   contextInfo?: Partial<proto.IContextInfo>;
-  body: Partial<proto.Message.InteractiveMessage.Body>;
+  body?: Partial<proto.Message.InteractiveMessage.Body>;
   header?: Partial<proto.Message.InteractiveMessage.Header>;
   footer?: Partial<proto.Message.InteractiveMessage.Footer>;
   messageParamsJson?: Partial<MessageParamsJson>;
