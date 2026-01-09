@@ -680,7 +680,7 @@ global.dfail = (type: any, m: any, conn: any) => {
     admin: null,
     botAdmin: '```Yuki Blom Jadi Admin, Gabisa pake Fitur itu🥲```',
     restrict: '```Restrict is turned on in this Chat, Please turn off restrict```',
-    unreg: '```You are not registered yet, please register first by typing:\n.register```',
+    unreg: '```You are not registered yet, please register first:\nVia WhatsApp Directly: .register\nVia Website: .regweb```',
     premium: '```This feature can only be accessed by premium members!```',
     banned: '```You cannot use this command because you have been banned! With reason: ```' + bannedReason,
   }[type];
