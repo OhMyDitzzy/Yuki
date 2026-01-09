@@ -250,12 +250,13 @@ Type *.menu* to get started!`;
       completed: false,
       data: null,
     };
-
+    
+    await m.reply("✅ Check your private chat to register, Bot has sent you a registration link.")
     await sock.sendButtonV2(
-      m.chat,
+      m.sender,
       {
         body: { text: caption },
-        footer: { text: "🎉 Register now and get bonus rewards!" },
+        footer: { text: "Do not share this registration link for your data security reasons!" },
       },
       [
         {
