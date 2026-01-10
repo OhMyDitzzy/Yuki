@@ -7,6 +7,7 @@
   "type": "module",
   "devDependencies": {
     "@types/bun": "^1.3.4",
+    "@types/image-size": "^0.7.0",
     "@types/node": "^25.0.2",
     "@types/yargs": "^17.0.35",
     "typescript": "^5.9.3"
@@ -19,6 +20,7 @@
     "canvafy": "^7.2.1",
     "cfonts": "^3.3.1",
     "chalk": "^5.6.2",
+    "cheerio": "^1.1.2",
     "chokidar": "^5.0.0",
     "cli-table3": "^0.6.5",
     "didyoumean2": "^7.0.4",
@@ -26,7 +28,9 @@
     "fluent-ffmpeg": "^2.1.3",
     "form-data": "^4.0.3",
     "fuse.js": "^7.1.0",
+    "image-size": "^2.0.2",
     "jimp": "^1.6.0",
+    "jspdf": "^4.0.0",
     "lowdb": "^3.0.0",
     "moment-timezone": "^0.6.0",
     "node-webpmux": "^3.2.1",
@@ -39,7 +43,9 @@
   "trustedDependencies": [
     "baileys",
     "canvas",
+    "core-js",
     "protobufjs",
-    "sharp"
+    "sharp",
+    "jspdf"
   ]
 }
