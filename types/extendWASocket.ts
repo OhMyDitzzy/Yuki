@@ -3,7 +3,8 @@ import type {
   MiscMessageGenerationOptions,
   MessageRelayOptions,
   proto,
-  MessageGenerationOptionsFromContent
+  MessageGenerationOptionsFromContent,
+  AnyMessageContent
 } from "baileys";
 import type { ILogger } from "baileys/lib/Utils/logger";
 import type { BtnOptsV2ListParams, BtnOptsV2Params, ButtonParams, ButtonV2Params, InteractiveMessageContent, ListSection, SendButtonOptions, SendListOptions, ListV2, CarouselCard, BtnOptsCarouselParams } from "./buttons/interactive_message_button";
@@ -71,12 +72,18 @@ export interface ExtendedWASocket extends WASocket {
     buttons: ButtonV2Params[],
     quoted: MessageGenerationOptionsFromContent
   ): Promise<ExtendedWAMessage>;
-  
+
   sendCarousel(
     jid: string,
     bodyOpts: BtnOptsCarouselParams,
     cards: CarouselCard[],
     quoted: MessageGenerationOptionsFromContent
+  ): Promise<void>;
+
+  sendAlbumMessage(
+    jid: string,
+    medias: AnyMessageContent[],
+    quoted: MiscMessageGenerationOptions
   ): Promise<void>;
 
   sendInteractiveMessage(
@@ -214,7 +221,7 @@ export interface ExtendedWASocket extends WASocket {
     forwardingScore?: boolean | number,
     options?: any
   ): Promise<any>;
-  
+
   execCall(m: ExtendedWAMessage, command: string, ...params: any[]): Promise<{
     success: boolean;
     result?: any;

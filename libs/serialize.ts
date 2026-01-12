@@ -5,14 +5,17 @@ import type {
 } from "baileys";
 import _makeWASockets, {
   areJidsSameUser,
+  delay,
   downloadContentFromMessage,
   extractMessageContent,
   generateForwardMessageContent,
   generateMessageID,
   generateMessageIDV2,
+  generateWAMessage,
   generateWAMessageFromContent,
   getDevice,
   isJidGroup,
+  isJidNewsletter,
   jidDecode,
   jidNormalizedUser,
   normalizeMessageContent,
@@ -33,6 +36,7 @@ import type { ExtendedWASocket } from "../types/extendWASocket";
 import type { ExtendedWAMessage } from "../types/extendWAMessage";
 import { makeInMemoryStore } from "./makeInMemoryStore.ts";
 import pino from "pino";
+import { randomBytes } from "node:crypto";
 
 global.store = await makeInMemoryStore({ logger: pino().child({ level: 'silent', stream: 'store' }), saveInterval: 60000 })
 
@@ -998,7 +1002,80 @@ END:VCARD`.trim();
         return fullMsg;
       }
     },
+    sendAlbumMessage: {
+      async value(
+        jid: string,
+        medias: any[],
+        options: any = {}
+      ) {
+        for (const media of medias) {
+          if (!media.image && !media.video)
+            throw new TypeError(`medias[i] must have image or video property`)
+        }
+        const time = options.delay || 500
+        delete options.delay
 
+        const album = generateWAMessageFromContent(jid, {
+          albumMessage: {
+            expectedImageCount: medias.filter(media => media.image).length,
+            expectedVideoCount: medias.filter(media => media.video).length,
+            ...options
+          }
+        }, { userJid: conn.user.lid, ...options })
+        await conn.relayMessage(jid, album.message, { messageId: album.key.id })
+        let msg: any
+        for (const i in medias) {
+          const media = medias[i]
+          if (media.image) {
+            msg = await generateWAMessage(jid, {
+              image: media.image,
+              ...media,
+              ...options
+            }, {
+              userJid: conn.user.lis,
+              upload: async (readStream, opts) => {
+                const up = await conn.waUploadToServer(readStream, {
+                  ...opts,
+                  newsletter: isJidNewsletter(jid)
+                })
+                return up
+              },
+              ...options
+            })
+          } else if (media.video) {
+            msg = await generateWAMessage(jid, {
+              video: media.video,
+              ...media,
+              ...options
+            }, {
+              userJid: conn.user.lid,
+              upload: async (readStream, opts) => {
+                const up = await conn.waUploadToServer(readStream, {
+                  ...opts,
+                  newsletter: isJidNewsletter(jid)
+                })
+                return up
+              },
+              ...options,
+            })
+          }
+          if (msg) {
+            msg.message.messageContextInfo = {
+              messageSecret: randomBytes(32),
+              messageAssociation: {
+                associationType: 1,
+                parentMessageKey: album.key
+              }
+            }
+          }
+          await conn.relayMessage(jid, msg.message, {
+            messageId: msg.key.id
+          })
+          await delay(time)
+        }
+      },
+      enumerable: true
+    },
     sendButton: {
       async value(
         jid: string,
