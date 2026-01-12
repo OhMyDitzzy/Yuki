@@ -5,5 +5,5 @@ interval: 5
 
 keep: important-*, session-*, *.log, *.db
 
-delete: tmp-*
+delete: tmp-*, hd_*
 delete_older_than: 30m

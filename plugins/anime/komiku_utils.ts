@@ -359,7 +359,7 @@ export class Komiku {
     }
   }
 
-  async readChapter(chapterSlug: string): Promise<ApiResponse<ChapterRead | null>> {
+  async readChapter(chapterSlug: string, allChapters?: ChapterInfo[]): Promise<ApiResponse<ChapterRead | null>> {
     try {
       const { data } = await axios.get<string>(`${this.BASE_URL}/${chapterSlug}/`);
       const $ = cheerio.load(data);
@@ -378,25 +378,40 @@ export class Komiku {
         }
       });
 
-      let prevChapterUrl: string | null = null;
-
-      $('.toolbar a').each((_, el) => {
-        const href = $(el).attr('href') || '';
-        const title = $(el).attr('title') || '';
-
-        if (title.toLowerCase().includes('sebelumnya') || title.toLowerCase().includes('prev')) {
-          prevChapterUrl = href.startsWith('http') ? href : `${this.BASE_URL}${href}`;
-        }
-      });
-
       images.sort((a, b) => a.index - b.index);
+
+      let prevChapter: ChapterInfo | null = null;
+      let nextChapter: ChapterInfo | null = null;
+
+      if (allChapters && allChapters.length > 0) {
+        const currentIndex = allChapters.findIndex(ch => ch.slug === chapterSlug);
+
+        if (currentIndex !== -1) {
+          if (currentIndex < allChapters.length - 1) {
+            prevChapter = allChapters[currentIndex + 1];
+          }
+
+          if (currentIndex > 0) {
+            nextChapter = allChapters[currentIndex - 1];
+          }
+        }
+      }
 
       const result: ChapterRead = {
         title,
         totalImages: images.length,
         images,
-        prevChapterUrl
+        prevChapter,
+        nextChapter,
+        allChapters: allChapters || []
       } as ChapterRead;
+
+      console.log('[Komiku Utils] Chapter navigation:', {
+        currentSlug: chapterSlug,
+        totalChapters: allChapters?.length || 0,
+        prevChapter: result.prevChapter,
+        nextChapter: result.nextChapter
+      });
 
       return this.wrapResponse(result);
 

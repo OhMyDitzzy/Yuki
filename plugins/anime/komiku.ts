@@ -1,9 +1,129 @@
 import type { PluginHandler } from "@yuki/types";
-import { getSlugFromUrl, Komiku, type ApiResponse, type SearchResult, type MangaDetail, type LatestManga, type ChapterRead } from "plugins/anime/komiku_utils"
+import { getSlugFromUrl, Komiku, type ApiResponse, type SearchResult } from "plugins/anime/komiku_utils"
 import type { CarouselCard } from "types/buttons/interactive_message_button";
 import { jsPDF } from "jspdf";
 import axios from "axios";
 import sizeOf from "image-size";
+import { WebSocket } from "ws";
+import { createHash } from "crypto";
+
+const WS_URL = process.env.WS_URL || "wss://ditzzy-yuki.hf.space/ws";
+let botWs: WebSocket | null = null;
+
+const activeStreamSessions = new Map<string, Set<string>>();
+
+function initBotWebSocket() {
+  if (botWs?.readyState === WebSocket.OPEN) return;
+
+  botWs = new WebSocket(WS_URL);
+
+  botWs.on("open", () => {
+    console.log("[Comic Bot WebSocket] Connected to web server");
+    botWs?.send(JSON.stringify({ type: "bot_connect" }));
+  });
+
+  botWs.on("message", (data) => {
+    try {
+      const message = JSON.parse(data.toString());
+      handleBotWebMessage(message);
+    } catch (error) {
+      console.error("[Comic Bot WebSocket] Error parsing message:", error);
+    }
+  });
+
+  botWs.on("close", () => {
+    console.log("[Comic Bot WebSocket] Disconnected, reconnecting in 5s...");
+    botWs = null;
+    setTimeout(initBotWebSocket, 5000);
+  });
+
+  botWs.on("error", (error) => {
+    console.error("[Comic Bot WebSocket] Error:", error);
+  });
+}
+
+async function handleBotWebMessage(message: any) {
+  const { type } = message;
+
+  switch (type) {
+    case 'fetch_chapter_request': {
+      const { sessionId, chapterSlug, sender, allChapters } = message;
+      console.log(`[Bot] Fetching chapter: ${chapterSlug} for session: ${sessionId}`);
+
+      try {
+        const komiku = new Komiku();
+        const chapter = await komiku.readChapter(chapterSlug, allChapters);
+
+        if (!chapter || !chapter.results) {
+          throw new Error('Chapter not found');
+        }
+
+        const data = chapter.results;
+
+        const chapterData = {
+          slug: chapterSlug,
+          title: data.title,
+          images: data.images,
+          totalImages: data.totalImages,
+          prevChapter: data.prevChapter,
+          nextChapter: data.nextChapter,
+          allChapters: data.allChapters || allChapters || []
+        };
+
+        console.log('[Bot] Chapter data prepared:', {
+          slug: chapterData.slug,
+          title: chapterData.title,
+          hasPrev: !!chapterData.prevChapter,
+          hasNext: !!chapterData.nextChapter,
+          prevSlug: chapterData.prevChapter?.slug,
+          nextSlug: chapterData.nextChapter?.slug
+        });
+
+        if (botWs?.readyState === WebSocket.OPEN) {
+          botWs.send(JSON.stringify({
+            type: 'chapter_fetched',
+            sessionId,
+            success: true,
+            chapterData
+          }));
+          console.log(`[Bot] Chapter data sent for session: ${sessionId}`);
+        }
+      } catch (error: any) {
+        console.error('[Bot] Error fetching chapter:', error);
+        if (botWs?.readyState === WebSocket.OPEN) {
+          botWs.send(JSON.stringify({
+            type: 'chapter_fetched',
+            sessionId,
+            success: false,
+            error: error.message || 'Failed to fetch chapter'
+          }));
+        }
+      }
+      break;
+    }
+    case 'session_cleanup': {
+      const { sessionId, sender } = message;
+      if (sender && activeStreamSessions.has(sender)) {
+        const userSessions = activeStreamSessions.get(sender)!;
+        userSessions.delete(sessionId);
+        if (userSessions.size === 0) {
+          activeStreamSessions.delete(sender);
+        }
+        console.log(`[Bot] Session ${sessionId} removed for ${sender}`);
+      }
+      break;
+    }
+    
+    case 'cleanup_confirmed': {
+      const { sessionId, sender } = message;
+      console.log(`[Bot] Cleanup confirmed for session: ${sessionId}`);
+      break;
+    }
+
+    default:
+      break;
+  }
+}
 
 function timeAgo(ms: number) {
   const now = Date.now();
@@ -39,7 +159,7 @@ let handler: PluginHandler = {
     let subCommand = args[0]
     let user = global.db.data.users[m.sender]
     let query = args.slice(1).join(" ")
-    
+
     if (!text) return conn.sendMessage(m.chat, {
       text: `Hallo ${user.name || m.name}!\n\nApa yang ingin kamu baca hari ini? Ketik:\n_${usedPrefix + command} search <judul>_ Untuk mencari manga/manhwa/manhua favorit mu.`,
       footer: "Atau klik tombol di bawah ini untuk mendapatkan informasi manga/manhwa/manhua terbaru dan populer",
@@ -69,6 +189,196 @@ let handler: PluginHandler = {
     const komiku = new Komiku();
 
     switch (subCommand) {
+      case 'reset': {
+        if (!global.db.data.users[m.sender]?.moderator) {
+          return m.reply("⚠️ *Akses Ditolak*\n\nPerintah ini hanya bisa digunakan oleh owner!");
+        }
+        let targetJid: string | undefined;
+        
+        if (m.quoted) {
+          targetJid = m.quoted.sender;
+        } else if (m.mentionedJid?.length) {
+          targetJid = m.mentionedJid[0];
+        } else if (query) {
+          targetJid = query.includes('@') ? query : `${query}@s.whatsapp.net`;
+        }
+        
+        const jid = await conn.getJid(targetJid);
+
+        if (!jid) {
+          return m.reply(`⚠️ *Format salah!*
+
+Gunakan salah satu format berikut:
+• Tag user: _${usedPrefix + command} reset @user_
+• Reply pesan user: _reply message + ${usedPrefix + command} reset_
+• Masukkan nomor: _${usedPrefix + command} reset 628123456789_`);
+        }
+        
+        if (!jid.includes('@')) {
+          targetJid = `${targetJid}@s.whatsapp.net`;
+        }
+        
+        const userSessions = activeStreamSessions.get(targetJid);
+        
+        if (!userSessions || userSessions.size === 0) {
+          return m.reply(`ℹ️ *User tidak memiliki stream aktif*
+
+User: ${jid.split('@')[0]}
+Stream aktif: 0`);
+        }
+
+        const sessionCount = userSessions.size;
+        const sessions = Array.from(userSessions);
+
+        m.react("⏳");
+        
+        if (botWs?.readyState === WebSocket.OPEN) {
+          for (const sessionId of sessions) {
+            botWs.send(JSON.stringify({
+              type: 'force_cleanup_session',
+              sessionId,
+              sender: jid,
+              reason: 'Owner reset'
+            }));
+          }
+        }
+
+        activeStreamSessions.delete(targetJid);
+
+        m.react("✅");
+        return m.reply(`✅ *Reset Stream Berhasil*
+
+User: ${jid.split('@')[0]}
+Stream dihapus: ${sessionCount}
+Status: Semua session telah direset
+
+User sekarang bisa membuat stream baru.`);
+      }
+      
+      case 'stream': {
+        if (!query) return m.reply(`Masukan slug manga! Contoh: ${usedPrefix + command} stream solo-leveling-id`);
+
+        if (!user.password) {
+          return m.reply(`⚠️ *Password Belum Diatur*
+
+Untuk menggunakan fitur stream comic, kamu harus set password terlebih dahulu.
+
+Ketik: _${usedPrefix}setpassword <password_kamu>_`);
+        }
+
+        if (!user.premium) {
+          const userSessions = activeStreamSessions.get(m.sender);
+          const activeCount = userSessions?.size || 0;
+
+          if (activeCount >= 2) {
+            return m.reply(`⚠️ *Limit Stream Tercapai*
+
+Kamu sudah memiliki *${activeCount} stream aktif*.
+
+User non-premium hanya bisa memiliki maksimal *2 stream aktif* secara bersamaan.
+
+*Solusi:*
+• Tunggu hingga stream lama expired (24 jam)
+• Upgrade ke premium: _${usedPrefix}premium_
+• Hubungi owner untuk hapus session: _${usedPrefix}owner_`);
+          }
+        }
+
+        if (!botWs || botWs.readyState !== WebSocket.OPEN) {
+          initBotWebSocket();
+          await new Promise(resolve => setTimeout(resolve, 1000));
+        }
+
+        if (botWs?.readyState !== WebSocket.OPEN) {
+          return m.reply("⚠️ Koneksi ke web server gagal. Coba lagi nanti.");
+        }
+
+        m.react("⏳");
+        try {
+          const detail = await komiku.getDetail(query);
+
+          if (!detail || !detail.results) {
+            m.react("❌");
+            return m.reply("Detail manga tidak ditemukan!");
+          }
+
+          const data = detail.results;
+          const sessionHash = createHash("md5")
+            .update(`comic_${m.sender}_${Date.now()}`)
+            .digest("hex");
+            
+          if (!activeStreamSessions.has(m.sender)) {
+            activeStreamSessions.set(m.sender, new Set());
+          }
+          activeStreamSessions.get(m.sender)!.add(sessionHash);
+
+          const comicData = {
+            type: 'comic_stream',
+            sessionId: sessionHash,
+            sender: m.sender,
+            password: user.password,
+            data: {
+              slug: query,
+              title: data.title,
+              indonesiaTitle: data.indonesia_title,
+              type: data.type,
+              author: data.author,
+              status: data.status,
+              genre: data.genre || [],
+              synopsis: data.synopsis,
+              thumbnailUrl: data.thumbnailUrl,
+              chapters: data.chapters?.map(ch => ({
+                slug: ch.slug_chapter,
+                chapter: ch.chapter,
+                date: ch.date,
+                views: ch.views
+              })) || []
+            }
+          };
+
+          botWs.send(JSON.stringify(comicData));
+
+          const webUrl = process.env.WEB_URL || 'https://ditzzy-yuki.hf.space';
+          const streamLink = `${webUrl}/comic/${sessionHash}`;
+
+          const activeCount = activeStreamSessions.get(m.sender)!.size;
+          const statusText = user.premium 
+            ? "• *Status:* Premium (Unlimited)" 
+            : `• *Status:* Free (${activeCount}/2 stream aktif)`;
+
+          const caption = `✅ *Stream Comic Berhasil Dibuat!*
+
+• *${data.title}*
+• *Total Chapter:* ${data.chapters?.length || 0}
+${statusText}
+• *NOTE:* Link aktif selama *24 jam*
+
+Click tombol di bawah untuk mulai baca! 👇`;
+
+          await conn.sendButtonV2(
+            m.chat,
+            {
+              body: { text: caption },
+              footer: { text: "Jangan share link ini ke orang lain!" },
+            },
+            [
+              {
+                type: "url",
+                text: "🌐 Buka di Web",
+                url: streamLink,
+              }
+            ],
+            { quoted: m } as any
+          );
+
+          m.react("✅");
+        } catch (e) {
+          m.react("❌");
+          m.reply("Yahh kayak nya ada yang error nih");
+          conn.error(m, e);
+        }
+        break;
+      }
       case "search": {
         if (!query) return m.reply(`Masukan judul! Contoh: ${usedPrefix + command} search solo leveling`)
 
@@ -88,8 +398,8 @@ let handler: PluginHandler = {
                 : detail.synopsis)
               : "Sinopsis tidak tersedia";
 
-            const genreText = detail.genre && detail.genre.length > 0 
-              ? detail.genre.join(", ") 
+            const genreText = detail.genre && detail.genre.length > 0
+              ? detail.genre.join(", ")
               : "Tidak diketahui";
 
             const totalChapters = detail.chapters?.length || 0;
@@ -111,13 +421,18 @@ ${synopsis}
               buttons: [
                 {
                   type: "buttons",
-                  text: "Baca chapter terbaru",
+                  text: "📖 Baca Chapter Terbaru",
                   id: `${usedPrefix + command} fetchComic ${res.latestChapter?.slug || ""}`
                 },
                 {
                   type: "buttons",
-                  text: "Daftar chapter",
+                  text: "📚 Daftar Chapter",
                   id: `${usedPrefix + command} getDetail ${getSlugFromUrl(res.mangaUrl)}`
+                },
+                {
+                  type: "buttons",
+                  text: "🌐 Stream di Web",
+                  id: `${usedPrefix + command} stream ${getSlugFromUrl(res.mangaUrl)}`
                 }
               ]
             })
@@ -141,7 +456,7 @@ ${query}
               text: "Semoga kamu suka!"
             }
           }, cards, { quoted: m } as any)
-          
+
           m.react("✅");
         } catch (e) {
           m.react("❌");
@@ -161,15 +476,15 @@ ${query}
         m.react("⏳")
         try {
           const detail = await komiku.getDetail(slug);
-          
+
           if (!detail || !detail.results) {
             m.react("❌");
             return m.reply("Detail manga tidak ditemukan!");
           }
 
           const data = detail.results;
-          const genreText = data.genre && data.genre.length > 0 
-            ? data.genre.join(", ") 
+          const genreText = data.genre && data.genre.length > 0
+            ? data.genre.join(", ")
             : "Tidak diketahui";
 
           const totalChapters = data.chapters?.length || 0;
@@ -193,7 +508,7 @@ ${data.synopsis || "Sinopsis tidak tersedia"}
 `;
 
           const sections = [];
-          const chapterRows = currentChapters.map((ch, idx) => ({
+          const chapterRows = currentChapters.map((ch, _) => ({
             title: `${ch.chapter}`,
             description: `${ch.date} • ${ch.views}`,
             id: `${usedPrefix + command} fetchComic ${ch.slug_chapter}`
@@ -206,7 +521,7 @@ ${data.synopsis || "Sinopsis tidak tersedia"}
 
           if (totalPages > 1) {
             const navRows = [];
-            
+
             if (page > 1) {
               navRows.push({
                 title: "⬅️ Halaman Sebelumnya",
@@ -214,7 +529,7 @@ ${data.synopsis || "Sinopsis tidak tersedia"}
                 id: `${usedPrefix + command} getDetail ${slug} ${page - 1}`
               });
             }
-            
+
             if (page < totalPages) {
               navRows.push({
                 title: "➡️ Halaman Selanjutnya",
@@ -228,6 +543,17 @@ ${data.synopsis || "Sinopsis tidak tersedia"}
               rows: navRows
             });
           }
+          
+          sections.push({
+            title: "⚡ Quick Actions",
+            rows: [
+              {
+                title: "🌐 Baca di Web (Stream)",
+                description: "Baca semua chapter di web browser",
+                id: `${usedPrefix + command} stream ${slug}`
+              }
+            ]
+          });
 
           await conn.sendMessage(m.chat, {
             image: { url: data.thumbnailUrl },
@@ -258,10 +584,25 @@ ${data.synopsis || "Sinopsis tidak tersedia"}
       case "fetchComic": {
         if (!query) return m.reply(`Masukan slug chapter! Contoh: ${usedPrefix + command} fetchComic solo-leveling-chapter-1`)
 
+        conn.fetchComic = conn.fetchComic || {};
+        if (conn!!.fetchComic[m.sender]) {
+          return m.reply(`⚠️ *Your request is already processing!*\n\nPlease wait until your current request is completed.`);
+        }
+
+        if (Object.keys(conn!!.fetchComic).length > 0) {
+          return m.reply("⚠️ *Another user is currently processing a comic, please wait until the process is complete!*");
+        }
+
+        conn.fetchComic[m.sender] = {
+          query,
+          startTime: Date.now(),
+          chatId: m.chat
+        }
+
         m.react("⏳")
         try {
           const chapter = await komiku.readChapter(query);
-          
+
           if (!chapter || !chapter.results) {
             m.react("❌");
             return m.reply("Chapter tidak ditemukan!");
@@ -276,13 +617,7 @@ ${data.synopsis || "Sinopsis tidak tersedia"}
 
 Mohon tunggu, sedang mengunduh dan membuat PDF...`);
 
-          const pdf = new jsPDF({
-            orientation: 'portrait',
-            unit: 'mm',
-            format: [210, 297],
-            compress: true
-          });
-
+          let pdf: jsPDF | null = null;
           let isFirstPage = true;
           let successCount = 0;
           let failedImages: number[] = [];
@@ -330,13 +665,13 @@ Mohon tunggu, sedang mengunduh dan membuat PDF...`);
                 });
 
                 const response = await withAbsoluteTimeout(downloadPromise, ABSOLUTE_TIMEOUT, index);
-                
+
                 clearTimeout(abortTimeout);
                 return response;
 
               } catch (err: any) {
                 clearTimeout(abortTimeout);
-                
+
                 if (axios.isCancel(err) || err.code === 'ECONNABORTED' || err.message?.includes('timeout')) {
                   console.error(`[${index}] ⏱️ Timeout on attempt ${attempt}`);
                 } else {
@@ -355,9 +690,6 @@ Mohon tunggu, sedang mengunduh dan membuat PDF...`);
 
           for (let i = 0; i < data.images.length; i += BATCH_SIZE) {
             const batch = data.images.slice(i, Math.min(i + BATCH_SIZE, data.images.length));
-            const batchNum = Math.floor(i / BATCH_SIZE) + 1;
-            const totalBatches = Math.ceil(data.images.length / BATCH_SIZE);
-                        
             const batchPromises = batch.map(async (img) => {
               try {
                 const response = await downloadImageWithRetry(img.imageUrl, img.index);
@@ -367,7 +699,7 @@ Mohon tunggu, sedang mengunduh dan membuat PDF...`);
                 return { img, response: null, success: false, error: err.message };
               }
             });
-            
+
             const batchResults = await Promise.allSettled(batchPromises);
             for (const result of batchResults) {
               if (result.status === 'fulfilled') {
@@ -378,55 +710,45 @@ Mohon tunggu, sedang mengunduh dan membuat PDF...`);
                     const imageBuffer = Buffer.from(response.data);
                     const imageData = imageBuffer.toString('base64');
                     const imageType = response.headers['content-type']?.includes('png') ? 'PNG' : 'JPEG';
-
                     const dimensions = sizeOf(imageBuffer);
                     const imgWidth = dimensions.width || 800;
                     const imgHeight = dimensions.height || 1200;
-                    const isLandscape = imgWidth > imgHeight;
+                    const widthMM = (imgWidth * 25.4) / 96;
+                    const heightMM = (imgHeight * 25.4) / 96;
 
-                    if (!isFirstPage) {
-                      pdf.addPage(
-                        [210, 297],
-                        isLandscape ? 'landscape' : 'portrait'
+                    if (isFirstPage) {
+                      pdf = new jsPDF({
+                        orientation: widthMM > heightMM ? 'landscape' : 'portrait',
+                        unit: 'mm',
+                        format: [widthMM, heightMM],
+                        compress: true
+                      });
+                      isFirstPage = false;
+                    } else {
+                      pdf!.addPage(
+                        [widthMM, heightMM],
+                        widthMM > heightMM ? 'landscape' : 'portrait'
                       );
                     }
-                    isFirstPage = false;
 
-                    const pageWidth = pdf.internal.pageSize.getWidth();
-                    const pageHeight = pdf.internal.pageSize.getHeight();
-
-                    const imgRatio = imgWidth / imgHeight;
-                    const pageRatio = pageWidth / pageHeight;
-                    
-                    let finalWidth, finalHeight, offsetX = 0, offsetY = 0;
-                    
-                    if (imgRatio > pageRatio) {
-                      finalWidth = pageWidth;
-                      finalHeight = pageWidth / imgRatio;
-                      offsetY = (pageHeight - finalHeight) / 2;
-                    } else {
-                      finalHeight = pageHeight;
-                      finalWidth = pageHeight * imgRatio;
-                      offsetX = (pageWidth - finalWidth) / 2;
-                    }
-
-                    pdf.addImage(
+                    pdf!.addImage(
                       `data:image/${imageType.toLowerCase()};base64,${imageData}`,
                       imageType,
-                      offsetX,
-                      offsetY,
-                      finalWidth,
-                      finalHeight,
+                      0,
+                      0,
+                      widthMM,
+                      heightMM,
                       undefined,
                       'FAST'
                     );
 
-                    pdf.setFontSize(10);
-                    pdf.text(
-                      `Halaman ${img.index}`, 
-                      pageWidth / 2, 
-                      pageHeight - 5, 
-                      { align: 'center' }
+                    pdf!.setFontSize(8);
+                    pdf!.setTextColor(150, 150, 150);
+                    pdf!.text(
+                      `${img.index}`,
+                      widthMM - 10,
+                      heightMM - 5,
+                      { align: 'right' }
                     );
 
                     successCount++;
@@ -436,13 +758,24 @@ Mohon tunggu, sedang mengunduh dan membuat PDF...`);
                   }
                 } else {
                   failedImages.push(img.index);
-                  if (!isFirstPage) pdf.addPage();
-                  isFirstPage = false;
-                  pdf.setFontSize(12);
-                  pdf.text(
+
+                  if (isFirstPage) {
+                    pdf = new jsPDF({
+                      orientation: 'portrait',
+                      unit: 'mm',
+                      format: [210, 297],
+                      compress: true
+                    });
+                    isFirstPage = false;
+                  } else {
+                    pdf!.addPage();
+                  }
+
+                  pdf!.setFontSize(12);
+                  pdf!.text(
                     `Halaman ${img.index} gagal dimuat`,
-                    pdf.internal.pageSize.getWidth() / 2,
-                    pdf.internal.pageSize.getHeight() / 2,
+                    pdf!.internal.pageSize.getWidth() / 2,
+                    pdf!.internal.pageSize.getHeight() / 2,
                     { align: 'center' }
                   );
                 }
@@ -451,12 +784,13 @@ Mohon tunggu, sedang mengunduh dan membuat PDF...`);
               }
             }
 
-            const currentProgress = Math.min(i + BATCH_SIZE, data.images.length);
-            const percentage = ((currentProgress / data.images.length) * 100).toFixed(1);
-            
             if (i + BATCH_SIZE < data.images.length) {
               await delay(DELAY_BETWEEN_BATCHES);
             }
+          }
+
+          if (!pdf) {
+            throw new Error('Tidak ada gambar yang berhasil dimuat');
           }
 
           const pdfBuffer = Buffer.from(pdf.output('arraybuffer'));
@@ -489,6 +823,8 @@ Mohon tunggu, sedang mengunduh dan membuat PDF...`);
           console.error('Fatal error:', e);
           m.reply("Error saat membuat PDF. Coba lagi ya!");
           conn.error(m, e)
+        } finally {
+          delete conn.fetchComic[m.sender];
         }
         break;
       }
@@ -496,8 +832,8 @@ Mohon tunggu, sedang mengunduh dan membuat PDF...`);
       case "getLatestManga": {
         m.react("⏳")
         try {
-          const latest = await komiku.getLatestPopularManga();
-          
+          const latest: any = await komiku.getLatestPopularManga();
+
           if (!latest || !Array.isArray(latest.results) || latest.results.length === 0) {
             m.react("❌");
             return m.reply("Tidak ada manga terbaru saat ini!");
@@ -518,13 +854,18 @@ Mohon tunggu, sedang mengunduh dan membuat PDF...`);
               buttons: [
                 {
                   type: "buttons",
-                  text: "Baca Sekarang",
+                  text: "📖 Baca Sekarang",
                   id: `${usedPrefix + command} fetchComic ${getSlugFromUrl(manga.chapterUrl)}`
                 },
                 {
                   type: "buttons",
-                  text: "Lihat Detail",
+                  text: "📚 Lihat Detail",
                   id: `${usedPrefix + command} getDetail ${manga.slug}`
+                },
+                {
+                  type: "buttons",
+                  text: "🌐 Stream Web",
+                  id: `${usedPrefix + command} stream ${manga.slug}`
                 }
               ]
             })
@@ -538,7 +879,7 @@ Mohon tunggu, sedang mengunduh dan membuat PDF...`);
               text: "Selamat membaca!"
             }
           }, cards, { quoted: m } as any)
-          
+
           m.react("✅");
         } catch (e) {
           m.react("❌");
@@ -547,12 +888,12 @@ Mohon tunggu, sedang mengunduh dan membuat PDF...`);
         }
         break;
       }
-
+      
       case "getLatestManhwa": {
         m.react("⏳")
         try {
-          const latest = await komiku.getLatestPopularManhwa();
-          
+          const latest: any = await komiku.getLatestPopularManhwa();
+
           if (!latest || !Array.isArray(latest.results) || latest.results.length === 0) {
             m.react("❌");
             return m.reply("Tidak ada manhwa terbaru saat ini!");
@@ -573,13 +914,18 @@ Mohon tunggu, sedang mengunduh dan membuat PDF...`);
               buttons: [
                 {
                   type: "buttons",
-                  text: "Baca Sekarang",
+                  text: "📖 Baca Sekarang",
                   id: `${usedPrefix + command} fetchComic ${getSlugFromUrl(manga.chapterUrl)}`
                 },
                 {
                   type: "buttons",
-                  text: "Lihat Detail",
+                  text: "📚 Lihat Detail",
                   id: `${usedPrefix + command} getDetail ${manga.slug}`
+                },
+                {
+                  type: "buttons",
+                  text: "🌐 Stream Web",
+                  id: `${usedPrefix + command} stream ${manga.slug}`
                 }
               ]
             })
@@ -593,7 +939,7 @@ Mohon tunggu, sedang mengunduh dan membuat PDF...`);
               text: "Selamat membaca!"
             }
           }, cards, { quoted: m } as any)
-          
+
           m.react("✅");
         } catch (e) {
           m.react("❌");
@@ -606,8 +952,8 @@ Mohon tunggu, sedang mengunduh dan membuat PDF...`);
       case "getLatestManhua": {
         m.react("⏳")
         try {
-          const latest = await komiku.getLatestPopularManhua();
-          
+          const latest: any = await komiku.getLatestPopularManhua();
+
           if (!latest || !Array.isArray(latest.results) || latest.results.length === 0) {
             m.react("❌");
             return m.reply("Tidak ada manhua terbaru saat ini!");
@@ -628,13 +974,18 @@ Mohon tunggu, sedang mengunduh dan membuat PDF...`);
               buttons: [
                 {
                   type: "buttons",
-                  text: "Baca Sekarang",
+                  text: "📖 Baca Sekarang",
                   id: `${usedPrefix + command} fetchComic ${getSlugFromUrl(manga.chapterUrl)}`
                 },
                 {
                   type: "buttons",
-                  text: "Lihat Detail",
+                  text: "📚 Lihat Detail",
                   id: `${usedPrefix + command} getDetail ${manga.slug}`
+                },
+                {
+                  type: "buttons",
+                  text: "🌐 Stream Web",
+                  id: `${usedPrefix + command} stream ${manga.slug}`
                 }
               ]
             })
@@ -648,7 +999,7 @@ Mohon tunggu, sedang mengunduh dan membuat PDF...`);
               text: "Selamat membaca!"
             }
           }, cards, { quoted: m } as any)
-          
+
           m.react("✅");
         } catch (e) {
           m.react("❌");
@@ -659,7 +1010,7 @@ Mohon tunggu, sedang mengunduh dan membuat PDF...`);
       }
 
       default: {
-        return m.reply(`Perintah dengan *${subCommand}* tidak terdaftar di ${command}\n\nPerintah yang tersedia:\n• search <judul>\n• getDetail <slug> [page]\n• fetchComic <chapter_slug>\n• getLatestManga\n• getLatestManhwa\n• getLatestManhua`)
+        return m.reply(`Perintah dengan *${subCommand}* tidak terdaftar di ${command}\n\nPerintah yang tersedia:\n• search <judul>\n• stream <slug>\n• getDetail <slug> [page]\n• fetchComic <chapter_slug>\n• getLatestManga\n• getLatestManhwa\n• getLatestManhua`)
       }
     }
   }
